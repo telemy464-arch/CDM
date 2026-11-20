@@ -1,11 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
     ['vna_download_manager.py'],
     pathex=[],
     binaries=[],
-    datas=[('browser_extension', 'browser_extension'), ('assets', 'assets')],
+    datas=[('browser_extension', 'browser_extension'), ('assets', 'assets'), ('sounds', 'sounds')],
     hiddenimports=['tkinter', 'tkinter.ttk', 'tkinter.filedialog', 'tkinter.messagebox', 'tkinter.simpledialog', 'pyperclip', 'winsound', 'http.server', 'json', 'hashlib'],
     hookspath=[],
     hooksconfig={},
@@ -22,7 +21,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='VnA_Download_Manager',
+    name='CDM',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

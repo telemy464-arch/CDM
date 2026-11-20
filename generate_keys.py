@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-VnA Download Manager — Product Key Generator
+CDM (Cloud Download Manager) — Product Key Generator
 Usage:
     python generate_keys.py              (generates 10 keys)
     python generate_keys.py 50           (generates 50 keys)
@@ -10,7 +10,7 @@ Usage:
 
 import sys, hashlib, random
 
-SALT = "VNA_KEY_SALT_2026"
+SALT = "CDM_KEY_SALT_2026"
 CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
 def generate_key():
@@ -24,7 +24,8 @@ def generate_key():
 
 def verify_key(key):
     key = key.strip().upper().replace(" ", "")
-    if key in ("VNA-FREE-2026", "VNA-PRO-2026", "VNA-LIFETIME-PREMIUM"):
+    if key in ("CDM-FREE-2026", "CDM-PRO-2026", "CDM-LIFETIME-PREMIUM", "CDM-MASTER-KEY",
+               "VNA-FREE-2026", "VNA-PRO-2026", "VNA-LIFETIME-PREMIUM"):
         return True
     parts = key.split("-")
     if len(parts) != 5:
@@ -48,15 +49,15 @@ def main():
     keys = [generate_key() for _ in range(count)]
 
     print(f"\n=======================================================")
-    print(f"   VnA Download Manager — {count} Generated Product Keys")
+    print(f"   CDM (Cloud Download Manager) — {count} Product Keys")
     print(f"=======================================================\n")
     for i, k in enumerate(keys, 1):
         print(f"  {i:2d}. {k}")
 
     print(f"\nPromo / Master Keys (Always Valid):")
-    print(f"  - VNA-FREE-2026")
-    print(f"  - VNA-PRO-2026")
-    print(f"  - VNA-LIFETIME-PREMIUM")
+    print(f"  - CDM-FREE-2026")
+    print(f"  - CDM-PRO-2026")
+    print(f"  - CDM-LIFETIME-PREMIUM")
 
     if out_file:
         with open(out_file, "w", encoding="utf-8") as f:

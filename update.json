@@ -1,8 +1,8 @@
 {
-  "app_name": "VnA Download Manager",
+  "app_name": "CDM - Cloud Download Manager",
   "version": "2.0.0",
   "release_date": "2026-11-21",
-  "download_url": "https://github.com/telemy464-arch/CDM/releases/latest/download/VnA_Download_Manager_v2.0_Setup.exe",
+  "download_url": "https://github.com/telemy464-arch/CDM/releases/latest/download/CDM_Setup_v2.0.exe",
   "changelog": [
     "⚡ Multi-connection super-fast segmented download engine",
     "🎨 IDM-style professional user interface (Dark, Light, Glass themes)",

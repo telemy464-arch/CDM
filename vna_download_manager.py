@@ -49,9 +49,9 @@ except ImportError:
     HAS_REQUESTS = False
 
 # ── App constants ─────────────────────────────────────────────────────────────
-APP_NAME    = "VnA Download Manager"
+APP_NAME    = "CDM - Cloud Download Manager"
 VERSION     = "2.0.0"
-BUILD_DATE  = "2026-11-20"
+BUILD_DATE  = "2026-11-21"
 TRIAL_DAYS  = 3
 EXT_PORT    = 19876   # local HTTP server for browser extension
 
@@ -62,7 +62,7 @@ TRIAL_FILE    = BASE_DIR / ".trial"
 QUEUE_FILE    = BASE_DIR / "queue.json"
 
 DEFAULT_SETTINGS = {
-    "download_dir"      : str(Path.home() / "Downloads" / "VnA"),
+    "download_dir"      : str(Path.home() / "Downloads" / "CDM"),
     "connections"       : 8,
     "speed_limit_kbps"  : 0,
     "theme"             : "dark",
@@ -262,7 +262,7 @@ def windows_notify(title, msg):
             f'$xml.GetElementsByTagName("text")[1].InnerText="{msg}";'
             f'$toast=[Windows.UI.Notifications.ToastNotification]::new($xml);'
             f'[Windows.UI.Notifications.ToastNotificationManager]'
-            f'::CreateToastNotifier("VnA").Show($toast)'
+            f'::CreateToastNotifier("CDM").Show($toast)'
         )
         no_win = 0x08000000 if sys.platform == "win32" else 0
         subprocess.Popen(["powershell","-NoProfile","-Command", ps],
@@ -273,9 +273,9 @@ def windows_notify(title, msg):
 # ═══════════════════════════════════════════════════════════════════════════════
 # PRODUCT KEY & LICENSE SYSTEM (Microsoft-style)
 # ═══════════════════════════════════════════════════════════════════════════════
-KEY_SALT     = "VNA_KEY_SALT_2026"
+KEY_SALT     = "CDM_KEY_SALT_2026"
 KEY_CHARS    = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-APPDATA_VNA  = Path(os.environ.get("APPDATA", str(Path.home()))) / "VnA Download Manager"
+APPDATA_VNA  = Path(os.environ.get("APPDATA", str(Path.home()))) / "CDM"
 LICENSE_FILE = APPDATA_VNA / "license.json"
 
 try:
@@ -288,7 +288,8 @@ def verify_product_key(key):
     if not key or not isinstance(key, str):
         return False
     key = key.strip().upper().replace(" ", "")
-    if key in ("VNA-FREE-2026", "VNA-PRO-2026", "VNA-LIFETIME-PREMIUM", "VNA-MASTER-KEY"):
+    if key in ("CDM-FREE-2026", "CDM-PRO-2026", "CDM-LIFETIME-PREMIUM", "CDM-MASTER-KEY",
+               "VNA-FREE-2026", "VNA-PRO-2026", "VNA-LIFETIME-PREMIUM", "VNA-MASTER-KEY"):
         return True
     parts = key.split("-")
     if len(parts) != 5:
@@ -301,7 +302,7 @@ def verify_product_key(key):
     return parts[4] == chk
 
 class LicenseManager:
-    REG_SUBKEY = r"Software\VnA Download Manager"
+    REG_SUBKEY = r"Software\CDM"
 
     def __init__(self):
         self.data = self._load()
@@ -427,7 +428,7 @@ class DownloadTask:
         self.filename         = filename or self._guess_filename()
         self.category         = category_for(self.filename)
         self.filepath         = os.path.join(save_dir, self.category, self.filename)
-        self.parts_dir        = self.filepath + ".vna-parts"
+        self.parts_dir        = self.filepath + ".cdm-parts"
         self.proxy            = proxy
         self.size             = None
         self.downloaded       = 0
@@ -469,9 +470,9 @@ class DownloadTask:
         while os.path.exists(self.filepath):
             self.filename = f"{base} ({i}){ext}"
             self.filepath = os.path.join(os.path.dirname(self.filepath), self.filename)
-            self.parts_dir = self.filepath + ".vna-parts"
+            self.parts_dir = self.filepath + ".cdm-parts"
             i += 1
-        headers = {"User-Agent":"VnA-Download-Manager/2.0"}
+        headers = {"User-Agent":"CDM-CloudDownloadManager/2.0"}
         if self.referer: headers["Referer"] = self.referer
         opener = self._make_opener()
         size = None; supports_range = False
@@ -487,7 +488,7 @@ class DownloadTask:
                     if fn:
                         self.filename = fn
                         self.filepath = os.path.join(os.path.dirname(self.filepath), self.filename)
-                        self.parts_dir = self.filepath + ".vna-parts"
+                        self.parts_dir = self.filepath + ".cdm-parts"
         except Exception:
             try:
                 req2 = urllib.request.Request(self.url, headers={**headers,"Range":"bytes=0-0"})
@@ -571,7 +572,7 @@ class DownloadTask:
 
     def _download_part(self, part, attempt=0):
         try:
-            headers = {"User-Agent":"VnA-Download-Manager/2.0"}
+            headers = {"User-Agent":"CDM-CloudDownloadManager/2.0"}
             if self.referer: headers["Referer"] = self.referer
             if part["range"]:
                 headers["Range"] = f"bytes={part['start']+part['done']}-{part['end']}"
@@ -769,7 +770,7 @@ class SiteGrabber:
             if proxy:
                 opener = urllib.request.build_opener(urllib.request.ProxyHandler({"http":proxy,"https":proxy}))
             req = urllib.request.Request(page_url,
-                                         headers={"User-Agent":"VnA-Download-Manager/2.0"})
+                                         headers={"User-Agent":"CDM-CloudDownloadManager/2.0"})
             with opener.open(req, timeout=30) as resp:
                 html = resp.read().decode("utf-8","ignore")
             # extract hrefs
@@ -826,7 +827,7 @@ class ExtensionServer:
                     self._cors()
                     self.send_header("Content-Type","application/json")
                     self.end_headers()
-                    self.wfile.write(b'{"status":"ok","app":"VnA Download Manager"}')
+                    self.wfile.write(b'{"status":"ok","app":"CDM - Cloud Download Manager"}')
             def do_POST(self):
                 if self.path == "/add":
                     length = int(self.headers.get("Content-Length",0))
@@ -913,6 +914,11 @@ def launch_gui():
     root.geometry("1100x680")
     root.minsize(900, 540)
     root.configure(bg="#1a1a2e")
+
+    try:
+        root.iconbitmap(str(BASE_DIR / "assets" / "icon.ico"))
+    except Exception:
+        pass
 
     FONT_UI    = ("Segoe UI", 9)
     FONT_BOLD  = ("Segoe UI", 9, "bold")
@@ -1007,9 +1013,9 @@ def launch_gui():
     hdr = tk.Frame(root, height=50)
     hdr.pack(fill="x"); hdr.pack_propagate(False)
 
-    hdr_title = tk.Label(hdr, text=f"⬇  {APP_NAME}", font=FONT_TITLE, anchor="w")
+    hdr_title = tk.Label(hdr, text=f"☁️  {APP_NAME}", font=FONT_TITLE, anchor="w")
     hdr_title.pack(side="left", padx=14)
-    hdr_ver   = tk.Label(hdr, text=f"v{VERSION} — IDM-er Dada, Goriber Bondhu",
+    hdr_ver   = tk.Label(hdr, text=f"v{VERSION} — Smart Cloud Downloader",
                           font=FONT_UI, anchor="w")
     hdr_ver.pack(side="left")
 
@@ -1620,7 +1626,7 @@ def launch_gui():
     # ── License Activate (Microsoft-style) ───────────────────────────────────
     def activate_dialog(mandatory=False):
         win = tk.Toplevel(root)
-        win.title("🔑 VnA Product Activation")
+        win.title("🔑 CDM Product Activation")
         win.geometry("560x360")
         win.resizable(False, False)
         win.transient(root)
@@ -1632,14 +1638,14 @@ def launch_gui():
         hdr_frame.pack(fill="x")
         hdr_frame.pack_propagate(False)
 
-        tk.Label(hdr_frame, text="🔑  Enter your Product Key", bg=t2["panel"],
+        tk.Label(hdr_frame, text="🔑  Enter your CDM Product Key", bg=t2["panel"],
                  fg="#ffffff", font=("Segoe UI", 13, "bold"), anchor="w").pack(side="left", padx=18, pady=10)
 
         content = tk.Frame(win, bg=t2["bg"])
         content.pack(fill="both", expand=True, padx=20, pady=16)
 
         tk.Label(content,
-                 text="Enter your 25-character product key to activate VnA Download Manager:\nExample: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX",
+                 text="Enter your 25-character product key to activate CDM (Cloud Download Manager):\nExample: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX",
                  bg=t2["bg"], fg=t2["muted"], font=FONT_UI, justify="left", anchor="w").pack(fill="x", pady=(0, 10))
 
         key_var = tk.StringVar()
@@ -1653,7 +1659,7 @@ def launch_gui():
 
         def on_key_type(*args):
             v = key_var.get().upper().replace(" ", "")
-            if v.startswith("VNA-") and len(v) < 25:
+            if (v.startswith("CDM-") or v.startswith("VNA-")) and len(v) < 25:
                 return
             clean = "".join(c for c in v if c.isalnum())
             if len(clean) > 25:
@@ -1675,7 +1681,7 @@ def launch_gui():
                 stat_lbl.configure(text="✅ Verification successful! Full lifetime license activated.", fg=t2["green"])
                 update_trial_label()
                 messagebox.showinfo("Activation Successful",
-                                    "Thank you! VnA Download Manager has been successfully activated.\n\nYou have unlimited lifetime access.", parent=win)
+                                    "Thank you! CDM (Cloud Download Manager) has been successfully activated.\n\nYou have unlimited lifetime access.", parent=win)
                 win.destroy()
             else:
                 stat_lbl.configure(text="❌ Invalid Product Key. Please check the key and try again.", fg=t2["red"])
@@ -1684,7 +1690,7 @@ def launch_gui():
             trial.start_trial()
             update_trial_label()
             messagebox.showinfo("Trial Started",
-                                f"Your {TRIAL_DAYS}-day free trial has been activated.\nEnjoy full features of VnA Download Manager!", parent=win)
+                                f"Your {TRIAL_DAYS}-day free trial has been activated.\nEnjoy full features of CDM (Cloud Download Manager)!", parent=win)
             win.destroy()
 
         def do_close():

@@ -17,18 +17,18 @@ chrome.storage.local.get(['enabled'], (r) => {
 // Context Menus
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: "vna_download_link",
-    title: "⬇ Download with VnA",
+    id: "cdm_download_link",
+    title: "☁️ Download with CDM",
     contexts: ["link"]
   });
   chrome.contextMenus.create({
-    id: "vna_download_video",
-    title: "⬇ Download Video with VnA",
+    id: "cdm_download_video",
+    title: "☁️ Download Video with CDM",
     contexts: ["video", "audio"]
   });
   chrome.contextMenus.create({
-    id: "vna_download_image",
-    title: "⬇ Download Image with VnA",
+    id: "cdm_download_image",
+    title: "☁️ Download Image with CDM",
     contexts: ["image"]
   });
 });

@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "VnA Download Manager Helper",
+  "name": "CDM - Cloud Download Manager Helper",
   "version": "2.0",
-  "description": "Automatically send downloads to VnA Download Manager",
+  "description": "Automatically send downloads to CDM (Cloud Download Manager)",
   "permissions": [
     "downloads", "contextMenus", "tabs", "activeTab",
     "storage", "notifications", "webRequest", "webRequestBlocking",

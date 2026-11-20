@@ -14,8 +14,8 @@
       if (!src) return;
 
       const btn = document.createElement('button');
-      btn.textContent = '⬇ VnA';
-      btn.title = 'Download with VnA Download Manager';
+      btn.textContent = '☁️ CDM';
+      btn.title = 'Download with CDM (Cloud Download Manager)';
       btn.style.cssText = `
         position:absolute; z-index:99999; top:8px; right:8px;
         background:linear-gradient(135deg,#e94560,#533483);
@@ -28,7 +28,7 @@
         browser.runtime.sendMessage({ type: 'SEND_URL', url: src, referer: location.href });
         btn.textContent = '✓ Sent!';
         btn.style.background = '#00c851';
-        setTimeout(() => { btn.textContent = '⬇ VnA'; btn.style.background = 'linear-gradient(135deg,#e94560,#533483)'; }, 2000);
+        setTimeout(() => { btn.textContent = '☁️ CDM'; btn.style.background = 'linear-gradient(135deg,#e94560,#533483)'; }, 2000);
       };
 
       const wrapper = video.parentElement;

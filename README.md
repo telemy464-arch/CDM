@@ -1,9 +1,13 @@
-# VnA Download Manager (CDM) v2.0 🚀
-> **The Ultimate IDM-like Smart Download Manager for Windows**
+# <img src="assets/logo.png" width="48" height="48" valign="middle"> CDM — Cloud Download Manager v2.0 🚀
+> **Smart Cloud Downloader for Windows — Fast, Reliable & Multi-Threaded**
 
 [![GitHub release](https://img.shields.io/github/v/release/telemy464-arch/CDM?color=brightgreen)](https://github.com/telemy464-arch/CDM/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-blue)](https://github.com/telemy464-arch/CDM)
 [![License](https://img.shields.io/badge/license-Proprietary-orange)](https://github.com/telemy464-arch/CDM)
+
+<p align="center">
+  <img src="assets/logo.png" width="160" height="160" alt="CDM Logo">
+</p>
 
 ---
 
@@ -47,7 +51,7 @@
 ### 1. Ready-to-use Installer (Recommended)
 Download the installer from the Releases section or run:
 ```
-VnA_Download_Manager_v2.0_Setup.exe
+CDM_Setup_v2.0.exe
 ```
 Follow the simple **Next ➔ Next ➔ Finish** wizard. Desktop shortcuts and file associations will be created automatically.
 
@@ -95,4 +99,4 @@ To push an update to your users, simply bump the `"version"` field in `update.js
 ---
 
 ## 📄 License
-Developed for fast, reliable, and user-friendly downloading on Windows.
+Developed by CDM Technology. Smart, fast, and multi-connection downloading on Windows.

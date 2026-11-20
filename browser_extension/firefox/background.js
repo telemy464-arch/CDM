@@ -17,18 +17,18 @@ browser.storage.local.get(['enabled'], (r) => {
 // Context Menus
 browser.runtime.onInstalled.addListener(() => {
   browser.contextMenus.create({
-    id: "vna_download_link",
-    title: "⬇ Download with VnA",
+    id: "cdm_download_link",
+    title: "☁️ Download with CDM",
     contexts: ["link"]
   });
   browser.contextMenus.create({
-    id: "vna_download_video",
-    title: "⬇ Download Video with VnA",
+    id: "cdm_download_video",
+    title: "☁️ Download Video with CDM",
     contexts: ["video", "audio"]
   });
   browser.contextMenus.create({
-    id: "vna_download_image",
-    title: "⬇ Download Image with VnA",
+    id: "cdm_download_image",
+    title: "☁️ Download Image with CDM",
     contexts: ["image"]
   });
 });
