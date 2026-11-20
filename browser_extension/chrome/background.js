@@ -1,13 +1,11 @@
-// VnA Download Manager - Chrome Extension Background Service Worker
-const VNA_PORT = 19876;
-const VNA_HOST = "http://127.0.0.1:" + VNA_PORT;
+// CDM - Cloud Download Manager - Chrome Extension Background Service Worker
+const CDM_PORT = 19876;
+const CDM_HOST = "http://127.0.0.1:" + CDM_PORT;
 
 let extensionEnabled = true;
-const VIDEO_EXTS = ['.mp4','.mkv','.webm','.avi','.mov','.flv','.m3u8','.mpd','.ts'];
-const SKIP_EXTS  = ['.html','.htm','.php','.asp','.js','.css','.json','.xml','.ico'];
-const DL_EXTS    = ['.zip','.rar','.7z','.exe','.msi','.apk','.dmg','.iso',
-                    '.pdf','.doc','.docx','.xls','.xlsx','.mp3','.flac','.wav',
-                    '.mp4','.mkv','.avi','.mov','.webm','.gz','.tar','.bz2','.deb','.rpm'];
+const DL_EXTS = ['.zip','.rar','.7z','.exe','.msi','.apk','.dmg','.iso',
+                 '.pdf','.doc','.docx','.xls','.xlsx','.mp3','.flac','.wav',
+                 '.mp4','.mkv','.avi','.mov','.webm','.gz','.tar','.bz2','.deb','.rpm','.torrent'];
 
 // Load saved state
 chrome.storage.local.get(['enabled'], (r) => {
@@ -18,27 +16,27 @@ chrome.storage.local.get(['enabled'], (r) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "cdm_download_link",
-    title: "☁️ Download with CDM",
+    title: "⚡ Download with CDM",
     contexts: ["link"]
   });
   chrome.contextMenus.create({
     id: "cdm_download_video",
-    title: "☁️ Download Video with CDM",
+    title: "⚡ Download Video/Audio with CDM",
     contexts: ["video", "audio"]
   });
   chrome.contextMenus.create({
     id: "cdm_download_image",
-    title: "☁️ Download Image with CDM",
+    title: "⚡ Download Image with CDM",
     contexts: ["image"]
   });
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   let url = info.linkUrl || info.srcUrl || info.pageUrl;
-  if (url) sendToVnA(url, tab?.url);
+  if (url) sendToCDM(url, tab?.url);
 });
 
-// Intercept downloads
+// Intercept browser downloads
 chrome.downloads.onCreated.addListener((item) => {
   if (!extensionEnabled) return;
   const url = item.url;
@@ -46,7 +44,7 @@ chrome.downloads.onCreated.addListener((item) => {
   if (DL_EXTS.includes(ext) || isLargeDownload(item)) {
     chrome.downloads.cancel(item.id, () => {
       chrome.downloads.erase({ id: item.id });
-      sendToVnA(url);
+      sendToCDM(url);
     });
   }
 });
@@ -63,18 +61,18 @@ function getExt(url) {
   } catch { return ''; }
 }
 
-function sendToVnA(url, referer) {
-  fetch(VNA_HOST + "/add", {
+function sendToCDM(url, referer) {
+  fetch(CDM_HOST + "/add", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, referer: referer || "" })
   }).catch(() => {
-    // VnA not running - open normally
-    chrome.tabs.create({ url });
+    // If CDM app is not currently open, resume browser download
+    chrome.downloads.download({ url: url });
   });
 }
 
-// Message from popup / content
+// Messages from popup / content scripts
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "TOGGLE") {
     extensionEnabled = msg.value;
@@ -82,7 +80,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: true });
   }
   if (msg.type === "SEND_URL") {
-    sendToVnA(msg.url, msg.referer);
+    sendToCDM(msg.url, msg.referer);
     sendResponse({ ok: true });
   }
   if (msg.type === "GET_STATE") {

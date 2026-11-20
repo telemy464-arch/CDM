@@ -1,53 +1,53 @@
-// VnA Download Manager - Chrome Extension Background Service Worker
-const VNA_PORT = 19876;
-const VNA_HOST = "http://127.0.0.1:" + VNA_PORT;
+// CDM - Cloud Download Manager - Firefox Extension Background Script
+const CDM_PORT = 19876;
+const CDM_HOST = "http://127.0.0.1:" + CDM_PORT;
 
 let extensionEnabled = true;
-const VIDEO_EXTS = ['.mp4','.mkv','.webm','.avi','.mov','.flv','.m3u8','.mpd','.ts'];
-const SKIP_EXTS  = ['.html','.htm','.php','.asp','.js','.css','.json','.xml','.ico'];
-const DL_EXTS    = ['.zip','.rar','.7z','.exe','.msi','.apk','.dmg','.iso',
-                    '.pdf','.doc','.docx','.xls','.xlsx','.mp3','.flac','.wav',
-                    '.mp4','.mkv','.avi','.mov','.webm','.gz','.tar','.bz2','.deb','.rpm'];
+const DL_EXTS = ['.zip','.rar','.7z','.exe','.msi','.apk','.dmg','.iso',
+                 '.pdf','.doc','.docx','.xls','.xlsx','.mp3','.flac','.wav',
+                 '.mp4','.mkv','.avi','.mov','.webm','.gz','.tar','.bz2','.deb','.rpm','.torrent'];
+
+const rt = typeof browser !== 'undefined' ? browser : chrome;
 
 // Load saved state
-browser.storage.local.get(['enabled'], (r) => {
-  if (r.enabled !== undefined) extensionEnabled = r.enabled;
-});
+rt.storage.local.get(['enabled']).then((r) => {
+  if (r && r.enabled !== undefined) extensionEnabled = r.enabled;
+}).catch(() => {});
 
 // Context Menus
-browser.runtime.onInstalled.addListener(() => {
-  browser.contextMenus.create({
+rt.runtime.onInstalled.addListener(() => {
+  rt.contextMenus.create({
     id: "cdm_download_link",
-    title: "☁️ Download with CDM",
+    title: "⚡ Download with CDM",
     contexts: ["link"]
   });
-  browser.contextMenus.create({
+  rt.contextMenus.create({
     id: "cdm_download_video",
-    title: "☁️ Download Video with CDM",
+    title: "⚡ Download Video/Audio with CDM",
     contexts: ["video", "audio"]
   });
-  browser.contextMenus.create({
+  rt.contextMenus.create({
     id: "cdm_download_image",
-    title: "☁️ Download Image with CDM",
+    title: "⚡ Download Image with CDM",
     contexts: ["image"]
   });
 });
 
-browser.contextMenus.onClicked.addListener((info, tab) => {
+rt.contextMenus.onClicked.addListener((info, tab) => {
   let url = info.linkUrl || info.srcUrl || info.pageUrl;
-  if (url) sendToVnA(url, tab?.url);
+  if (url) sendToCDM(url, tab?.url);
 });
 
-// Intercept downloads
-browser.downloads.onCreated.addListener((item) => {
+// Intercept browser downloads
+rt.downloads.onCreated.addListener((item) => {
   if (!extensionEnabled) return;
   const url = item.url;
   const ext = getExt(url);
   if (DL_EXTS.includes(ext) || isLargeDownload(item)) {
-    browser.downloads.cancel(item.id, () => {
-      browser.downloads.erase({ id: item.id });
-      sendToVnA(url);
-    });
+    rt.downloads.cancel(item.id).then(() => {
+      rt.downloads.erase({ id: item.id }).catch(() => {});
+      sendToCDM(url);
+    }).catch(() => {});
   }
 });
 
@@ -63,26 +63,23 @@ function getExt(url) {
   } catch { return ''; }
 }
 
-function sendToVnA(url, referer) {
-  fetch(VNA_HOST + "/add", {
+function sendToCDM(url, referer) {
+  fetch(CDM_HOST + "/add", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, referer: referer || "" })
-  }).catch(() => {
-    // VnA not running - open normally
-    browser.tabs.create({ url });
-  });
+  }).catch(() => {});
 }
 
-// Message from popup / content
-browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+// Messages from popup / content scripts
+rt.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "TOGGLE") {
     extensionEnabled = msg.value;
-    browser.storage.local.set({ enabled: msg.value });
+    rt.storage.local.set({ enabled: msg.value });
     sendResponse({ ok: true });
   }
   if (msg.type === "SEND_URL") {
-    sendToVnA(msg.url, msg.referer);
+    sendToCDM(msg.url, msg.referer);
     sendResponse({ ok: true });
   }
   if (msg.type === "GET_STATE") {

@@ -92,8 +92,14 @@ Root: HKCU; Subkey: "Software\Classes\magnet\shell\open\command"; ValueType: str
 ; Product Key & License Registry
 Root: HKCU; Subkey: "Software\CDM"; Flags: uninsdeletekey
 
-; NativeMessaging host for Chrome
-Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.cdm.downloadmanager"; ValueType: string; ValueName: ""; ValueData: "{app}\browser_extension\chrome\native_host.json"; Flags: uninsdeletekey; Tasks: chrome_ext
+; Chrome Extension
+Root: HKCU; Subkey: "Software\Google\Chrome\Extensions\cdm_download_manager"; ValueType: string; ValueName: "path"; ValueData: "{app}\browser_extension\chrome"; Flags: uninsdeletekey; Tasks: chrome_ext
+
+; Brave Extension
+Root: HKCU; Subkey: "Software\BraveSoftware\Brave-Browser\Extensions\cdm_download_manager"; ValueType: string; ValueName: "path"; ValueData: "{app}\browser_extension\chrome"; Flags: uninsdeletekey; Tasks: chrome_ext
+
+; Edge Extension
+Root: HKCU; Subkey: "Software\Microsoft\Edge\Extensions\cdm_download_manager"; ValueType: string; ValueName: "path"; ValueData: "{app}\browser_extension\chrome"; Flags: uninsdeletekey; Tasks: chrome_ext
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
@@ -156,10 +162,18 @@ begin
     Result := 1;
 end;
 
+procedure KillRunningApp();
+var
+  iResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM CDM.exe /T', '', SW_HIDE, ewWaitUntilTerminated, iResultCode);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if (CurStep=ssInstall) then
   begin
+    KillRunningApp();
     if (IsUpgrade()) then
       UnInstallOldVersion();
   end;

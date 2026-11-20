@@ -25,9 +25,9 @@
 
 ### 🌍 Browser Extensions
 - 🔹 **Full Browser Support:** Google Chrome, Microsoft Edge, Mozilla Firefox, Brave, Opera, Vivaldi.
-- 🔹 **Automatic Interception:** Captures browser downloads directly into VnA.
+- 🔹 **Automatic Interception:** Captures browser downloads directly into CDM.
 - 🔹 **Video Download Button:** Floating download button appears directly on web videos.
-- 🔹 **Context Menu Integration:** Right-click any link or media to "Download with VnA".
+- 🔹 **Context Menu Integration:** Right-click any link or media to "Download with CDM".
 - 🔹 **Extension Toggle:** Easy 1-click ON/OFF switch in extension popup.
 
 ### 🔑 Security & Licensing

@@ -1,5 +1,5 @@
 @echo off
-start "" pythonw vna_download_manager.py
+start "" pythonw vna_download_manager.pyw
 if errorlevel 1 (
   start "" python vna_download_manager.py
 )

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-VnA Download Manager v2.0  —  IDM-er Dada, Goriber Bondhu
-========================================================
+CDM - Cloud Download Manager v2.0  —  Smart Cloud Downloader
+============================================================
 Features:
   ✅ Multi-connection segmented download
   ✅ Pause / Resume / Stop
-  ✅ Clipboard monitor (auto-detect links)
-  ✅ Batch + Playlist download (yt-dlp)
-  ✅ Video quality selector
+  ✅ Smart Clipboard monitor (auto-detect file & video links only)
+  ✅ Batch + Playlist + 4K/2K/1080p Video download (yt-dlp + ffmpeg)
+  ✅ Video quality selector (4K, 2K, 1080p, 720p, 480p, 360p, MP3)
   ✅ Site Grabber
   ✅ Torrent (magnet via aria2c if available)
   ✅ Browser extension local HTTP server
@@ -87,6 +87,50 @@ CATEGORIES = {
     "Documents" : {".pdf",".doc",".docx",".txt",".epub",".xls",".xlsx",".ppt"},
     "Torrents"  : {".torrent"},
 }
+
+DOWNLOAD_EXTENSIONS = {
+    ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".iso", ".img",
+    ".exe", ".msi", ".apk", ".pkg", ".deb", ".rpm",
+    ".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".wmv", ".m4v", ".ts", ".m3u8", ".mpd",
+    ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".opus",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".epub",
+    ".torrent"
+}
+
+VIDEO_URL_PATTERNS = (
+    "youtube.com/watch", "youtu.be/", "youtube.com/shorts", "youtube.com/live",
+    "facebook.com/watch", "facebook.com/reel", "fb.watch",
+    "instagram.com/reel", "instagram.com/tv",
+    "tiktok.com/", "twitter.com/", "x.com/",
+    "vimeo.com/", "dailymotion.com/video"
+)
+
+def is_downloadable_link(text):
+    if not text:
+        return False
+    t = text.strip()
+    # If text has spaces or newlines, it is regular reading text - never popup
+    if any(c in t for c in (" ", "\t", "\n", "\r")):
+        return False
+    if t.startswith("magnet:?"):
+        return True
+    if not (t.startswith("http://") or t.startswith("https://")):
+        return False
+    lower = t.lower()
+    if any(p in lower for p in VIDEO_URL_PATTERNS):
+        return True
+    try:
+        path = urllib.parse.urlparse(t).path
+        ext = os.path.splitext(path)[1].lower()
+        if ext in DOWNLOAD_EXTENSIONS:
+            return True
+    except Exception:
+        pass
+    return False
+
+def is_video_stream_url(url):
+    u = (url or "").lower()
+    return any(p in u for p in VIDEO_URL_PATTERNS)
 CAT_ICONS = {
     "Video":"🎬","Music":"🎵","Pictures":"🖼️","Programs":"💾",
     "Compressed":"🗜️","Documents":"📄","Torrents":"🧲","Others":"📁",
@@ -294,8 +338,8 @@ def windows_notify(title, msg):
 # ═══════════════════════════════════════════════════════════════════════════════
 KEY_SALT     = "CDM_KEY_SALT_2026"
 KEY_CHARS    = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-APPDATA_VNA  = Path(os.environ.get("APPDATA", str(Path.home()))) / "CDM"
-LICENSE_FILE = APPDATA_VNA / "license.json"
+APPDATA_CDM  = Path(os.environ.get("APPDATA", str(Path.home()))) / "CDM"
+LICENSE_FILE = APPDATA_CDM / "license.json"
 
 try:
     import winreg
@@ -307,8 +351,7 @@ def verify_product_key(key):
     if not key or not isinstance(key, str):
         return False
     key = key.strip().upper().replace(" ", "")
-    if key in ("CDM-FREE-2026", "CDM-PRO-2026", "CDM-LIFETIME-PREMIUM", "CDM-MASTER-KEY",
-               "VNA-FREE-2026", "VNA-PRO-2026", "VNA-LIFETIME-PREMIUM", "VNA-MASTER-KEY"):
+    if key in ("CDM-FREE-2026", "CDM-PRO-2026", "CDM-LIFETIME-PREMIUM", "CDM-MASTER-KEY"):
         return True
     parts = key.split("-")
     if len(parts) != 5:
@@ -364,7 +407,7 @@ class LicenseManager:
 
     def save(self):
         try:
-            APPDATA_VNA.mkdir(parents=True, exist_ok=True)
+            APPDATA_CDM.mkdir(parents=True, exist_ok=True)
             with open(LICENSE_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, indent=2)
         except Exception:
@@ -712,27 +755,55 @@ class YtDlpTask:
         self.status = "downloading"
         ytdlp = shutil.which("yt-dlp") or shutil.which("yt-dlp.exe")
         if not ytdlp:
-            # try bundled
-            ytdlp = str(BASE_DIR / "yt-dlp.exe") if sys.platform == "win32" \
-                    else str(BASE_DIR / "yt-dlp")
-        if not os.path.exists(ytdlp):
+            for cand in [BASE_DIR / "yt-dlp.exe", BASE_DIR / "bin" / "yt-dlp.exe", Path(os.environ.get("LOCALAPPDATA","")) / "Programs" / "yt-dlp" / "yt-dlp.exe"]:
+                if os.path.exists(str(cand)):
+                    ytdlp = str(cand)
+                    break
+        if not ytdlp or not os.path.exists(str(ytdlp)):
+            # Auto-download yt-dlp if not found
+            try:
+                dest = str(BASE_DIR / "yt-dlp.exe")
+                req = urllib.request.Request("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe", headers={"User-Agent":"Mozilla/5.0 CDM-Downloader/2.0"})
+                with urllib.request.urlopen(req, timeout=30) as r, open(dest, "wb") as f:
+                    f.write(r.read())
+                ytdlp = dest
+            except Exception:
+                pass
+
+        if not ytdlp or not os.path.exists(str(ytdlp)):
             self.status = "error"
             self.error_msg = "yt-dlp not found. Install it from yt-dlp.org"
             return
-        cmd = [ytdlp]
+        cmd = [str(ytdlp)]
         if self.audio_only:
             cmd += ["-x", "--audio-format", "mp3", "-q"]
         else:
-            q_map = {"best":"bestvideo+bestaudio/best",
-                     "1080p":"bestvideo[height<=1080]+bestaudio/best",
-                     "720p":"bestvideo[height<=720]+bestaudio/best",
-                     "480p":"bestvideo[height<=480]+bestaudio/best",
-                     "360p":"bestvideo[height<=360]+bestaudio/best",
-                     "audio":"bestaudio"}
-            fmt_str = q_map.get(self.quality, "bestvideo+bestaudio/best")
+            q_map = {
+                "best": "bestvideo+bestaudio/best",
+                "4k": "bestvideo[height<=2160]+bestaudio/best",
+                "2k": "bestvideo[height<=1440]+bestaudio/best",
+                "1080p": "bestvideo[height<=1080]+bestaudio/best",
+                "720p": "bestvideo[height<=720]+bestaudio/best",
+                "480p": "bestvideo[height<=480]+bestaudio/best",
+                "360p": "bestvideo[height<=360]+bestaudio/best",
+                "audio": "bestaudio/best"
+            }
+            fmt_str = q_map.get(str(self.quality).lower(), "bestvideo+bestaudio/best")
             cmd += ["-f", fmt_str, "--merge-output-format", self.fmt]
+
+        # Locate ffmpeg for high-resolution video/audio merging
+        ffmpeg_loc = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+        if not ffmpeg_loc:
+            for cand in [BASE_DIR / "ffmpeg.exe", BASE_DIR / "bin" / "ffmpeg.exe", Path(os.environ.get("LOCALAPPDATA","")) / "Programs" / "ffmpeg" / "bin" / "ffmpeg.exe"]:
+                if os.path.exists(str(cand)):
+                    ffmpeg_loc = str(cand)
+                    break
+        if ffmpeg_loc:
+            cmd += ["--ffmpeg-location", str(ffmpeg_loc)]
+
         if self.proxy: cmd += ["--proxy", self.proxy]
         cmd += [
+            "--no-mtime",
             "--newline", "--progress-template",
             "%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(filename)s",
             "-o", os.path.join(self.save_dir, "Video", "%(title)s.%(ext)s"),
@@ -897,7 +968,7 @@ class ClipboardMonitor:
                     txt = ctypes.cast(hclip, ctypes.c_wchar_p).value or ""
                     ctypes.windll.user32.CloseClipboard()
                 txt = txt.strip()
-                if txt != self._last and txt.startswith(("http://","https://")):
+                if txt and txt != self._last and is_downloadable_link(txt):
                     self._last = txt
                     self.callback(txt)
             except Exception: pass
@@ -1254,9 +1325,11 @@ def launch_gui():
 
     def add_task(url, filename=None, autostart=True, referer="", is_ytdlp=False,
                  quality="best", fmt="mp4", audio_only=False):
-        if is_ytdlp:
+        if is_ytdlp or is_video_stream_url(url):
             task = YtDlpTask(url, settings["download_dir"],
-                             quality=quality, fmt=fmt, audio_only=audio_only,
+                             quality=quality or settings.get("yt_quality", "best"),
+                             fmt=fmt or settings.get("yt_format", "mp4"),
+                             audio_only=audio_only,
                              proxy=settings.get("proxy",""))
         else:
             task = DownloadTask(url, settings["download_dir"],
@@ -1398,10 +1471,16 @@ def launch_gui():
         b.pack(pady=10); return b
 
     # ── Add Download ──────────────────────────────────────────────────────────
-    def add_dialog():
+    def add_dialog(prefill_url=None):
         win,t2 = _dlg("Add New Download",540,330)
+        win.deiconify()
+        win.lift()
+        win.attributes("-topmost", True)
+        win.after_idle(win.attributes, "-topmost", False)
         _lbl(win,"Download URL:",t2)
         url_e=_ent(win,t2)
+        if prefill_url:
+            url_e.insert(0, prefill_url)
         _lbl(win,"Save filename (optional — auto-detect if empty):",t2)
         name_e=_ent(win,t2)
         _lbl(win,"Save folder:",t2)
@@ -1451,7 +1530,7 @@ def launch_gui():
         _lbl(win,"Quality:",t2)
         fr=tk.Frame(win,bg=t2["bg"]); fr.pack(fill="x",padx=14)
         q_var=tk.StringVar(value=settings.get("yt_quality","best"))
-        for q in ["best","1080p","720p","480p","360p","audio"]:
+        for q in ["best", "1080p", "720p", "480p", "360p", "audio"]:
             tk.Radiobutton(fr,text=q,variable=q_var,value=q,
                            bg=t2["bg"],fg=t2["fg"],selectcolor=t2["field"],
                            activebackground=t2["bg"],font=FONT_UI).pack(side="left",padx=5)
@@ -1689,7 +1768,7 @@ def launch_gui():
 
         def on_key_type(*args):
             v = key_var.get().upper().replace(" ", "")
-            if (v.startswith("CDM-") or v.startswith("VNA-")) and len(v) < 25:
+            if v.startswith("CDM-") and len(v) < 25:
                 return
             clean = "".join(c for c in v if c.isalnum())
             if len(clean) > 25:
@@ -2225,7 +2304,7 @@ def launch_gui():
     # ══════════════════════════════════════════════════════════════════════════
     def on_clip(url):
         if settings.get("clipboard_monitor") and not settings.get("silent_mode"):
-            root.after(0, lambda: show_clip_banner(url))
+            root.after(0, lambda: (show_clip_banner(url), add_dialog(prefill_url=url)))
 
     clip_mon = ClipboardMonitor(on_clip)
     if settings.get("clipboard_monitor", True):

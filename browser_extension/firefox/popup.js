@@ -1,4 +1,4 @@
-const VNA_PORT = 19876;
+const CDM_PORT = 19876;
 
 const toggleExt = document.getElementById('toggleExt');
 const urlInput  = document.getElementById('urlInput');
@@ -6,37 +6,39 @@ const btnDl     = document.getElementById('btnDl');
 const statusEl  = document.getElementById('status');
 const connDot   = document.getElementById('connDot');
 
+const rt = typeof chrome !== 'undefined' ? chrome : browser;
+
 // Load saved state
-browser.runtime.sendMessage({ type: 'GET_STATE' }, (r) => {
+rt.runtime.sendMessage({ type: 'GET_STATE' }, (r) => {
   if (r) toggleExt.checked = r.enabled;
 });
 
-// Check VnA connection
-fetch(`http://127.0.0.1:${VNA_PORT}/ping`)
+// Check CDM connection
+fetch(`http://127.0.0.1:${CDM_PORT}/ping`)
   .then(r => r.ok ? setConn(true) : setConn(false))
   .catch(() => setConn(false));
 
 function setConn(ok) {
   connDot.className = 'dot' + (ok ? '' : ' off');
-  statusEl.textContent = ok ? 'VnA app is connected ✓' : 'VnA app not running';
+  statusEl.textContent = ok ? 'CDM is connected ✓' : 'CDM app not running';
   statusEl.className = 'status ' + (ok ? 'ok' : 'err');
 }
 
 toggleExt.addEventListener('change', () => {
-  browser.runtime.sendMessage({ type: 'TOGGLE', value: toggleExt.checked });
+  rt.runtime.sendMessage({ type: 'TOGGLE', value: toggleExt.checked });
 });
 
 btnDl.addEventListener('click', () => {
   const url = urlInput.value.trim();
   if (!url) { statusEl.textContent = 'Please enter a URL'; return; }
-  browser.runtime.sendMessage({ type: 'SEND_URL', url, referer: '' }, () => {
-    statusEl.textContent = 'Sent to VnA ✓';
+  rt.runtime.sendMessage({ type: 'SEND_URL', url, referer: '' }, () => {
+    statusEl.textContent = 'Sent to CDM ✓';
     statusEl.className = 'status ok';
     urlInput.value = '';
   });
 });
 
 // Paste current tab URL
-browser.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+rt.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   if (tabs[0]?.url) urlInput.placeholder = tabs[0].url.slice(0, 50) + '...';
 });
