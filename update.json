@@ -1,16 +1,14 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "release_date": "2026-11-21",
   "download_url": "https://github.com/telemy464-arch/CDM/releases/latest/download/CDM_Setup_v2.0.exe",
   "changelog": [
-    "⚡ Multi-connection super-fast segmented download engine",
-    "🎨 IDM-style professional user interface (Dark, Light, Glass themes)",
-    "🔑 Microsoft-style Product Key activation and licensing system",
-    "🌐 Seamless browser integration for Chrome, Edge, and Firefox",
-    "📋 Real-time clipboard link grabber and site batch download",
-    "🕒 Task scheduler, speed limit throttle, and live chunk map",
-    "🔄 Auto-update notification via GitHub update.json"
+    "🚀 New Super Fast Download Engine optimizations",
+    "🎨 Official CDM brand logo and iconography integration",
+    "🔑 Enhanced Microsoft-style Product Key activation",
+    "🌐 Improved Chrome and Firefox browser extensions",
+    "⚡ Silent background launch without console or PowerShell"
   ],
   "mandatory": false,
   "min_os": "Windows 10"
