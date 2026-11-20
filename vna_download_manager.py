@@ -31,7 +31,7 @@ Features:
 
 import hashlib, json, math, os, shutil, subprocess, sys, re
 import threading, time, urllib.error, urllib.parse, urllib.request
-import socket, http.server, winsound
+import socket, http.server, winsound, tempfile, ssl
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -925,14 +925,19 @@ def launch_gui():
 
     # ── theme helper ──────────────────────────────────────────────────────────
     def T():
-        return THEMES.get(settings.get("theme","dark"), THEMES["dark"])
+        return THEMES.get(settings.get("theme", "light"), THEMES["light"])
+
+    # Ensure light theme default
+    if settings.get("theme") not in ["light", "dark", "glass"]:
+        settings["theme"] = "light"
 
     # ── root window ───────────────────────────────────────────────────────────
     root = tk.Tk()
     root.title(f"{APP_NAME} v{VERSION}")
     root.geometry("1100x680")
     root.minsize(900, 540)
-    root.configure(bg="#1a1a2e")
+    root.configure(bg=T()["bg"])
+    root.withdraw()  # Initially hidden until update check passes
 
     try:
         root.iconbitmap(str(BASE_DIR / "assets" / "icon.ico"))
@@ -1367,8 +1372,14 @@ def launch_gui():
     # ══════════════════════════════════════════════════════════════════════════
     def _dlg(title, w=540, h=320):
         win = tk.Toplevel(root)
-        win.title(title); win.geometry(f"{w}x{h}")
-        win.transient(root); win.grab_set()
+        win.title(title)
+        x = max(50, (win.winfo_screenwidth() - w) // 2)
+        y = max(50, (win.winfo_screenheight() - h) // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        if root.state() != "withdrawn":
+            try: win.transient(root)
+            except Exception: pass
+        win.grab_set()
         t2 = T(); win.configure(bg=t2["bg"])
         return win, t2
 
@@ -1789,49 +1800,152 @@ def launch_gui():
             parent=root)
 
     # ── Update check (GitHub update.json) ────────────────────────────────────
-    def check_updates(manual=True):
+    def check_updates(manual=True, on_startup=False, on_success_no_update=None):
         def _check_worker():
             try:
                 up_url = settings.get("update_url", "https://raw.githubusercontent.com/telemy464-arch/CDM/main/update.json")
-                req = urllib.request.Request(up_url, headers={"User-Agent": "VnA-Update-Checker/2.0"})
-                with urllib.request.urlopen(req, timeout=6) as resp:
+                req = urllib.request.Request(up_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CDM-Updater/2.0"})
+                try:
+                    ctx = ssl.create_default_context()
+                    resp = urllib.request.urlopen(req, timeout=8, context=ctx)
+                except Exception:
+                    ctx = ssl._create_unverified_context()
+                    resp = urllib.request.urlopen(req, timeout=8, context=ctx)
+
+                with resp:
                     raw = resp.read().decode("utf-8")
                     data = json.loads(raw)
 
                 remote_v = data.get("version", "").strip()
                 if not remote_v:
+                    if on_startup and on_success_no_update:
+                        root.after(0, on_success_no_update)
                     return
 
                 def vtuple(v):
                     return [int(x) for x in re.findall(r'\d+', v)]
 
-                if vtuple(remote_v) > vtuple(VERSION):
-                    root.after(0, lambda: show_update_popup(data))
-                elif manual:
-                    root.after(0, lambda: messagebox.showinfo(
-                        "Up to Date",
-                        f"You have the latest version of {APP_NAME}!\n\nCurrent Version: v{VERSION}\nLatest Version:  v{remote_v}",
-                        parent=root))
+                is_mandatory = bool(data.get("mandatory", False)) or on_startup
+                has_update = vtuple(remote_v) > vtuple(VERSION)
+
+                if has_update:
+                    root.after(0, lambda: show_update_popup(data, mandatory=is_mandatory))
+                else:
+                    if on_startup and on_success_no_update:
+                        root.after(0, on_success_no_update)
+                    elif manual:
+                        root.after(0, lambda: messagebox.showinfo(
+                            "Up to Date",
+                            f"You have the latest version of {APP_NAME}!\n\nCurrent Version: v{VERSION}\nLatest Version:  v{remote_v}",
+                            parent=root))
             except Exception as e:
-                if manual:
-                    root.after(0, lambda: messagebox.showinfo(
+                if on_startup:
+                    root.after(0, lambda: show_offline_prompt(str(e), on_success_no_update))
+                elif manual:
+                    root.after(0, lambda: messagebox.showerror(
                         "Update Check",
                         f"Current version: v{VERSION}\n\nCould not reach GitHub update server.\nMake sure update.json is online.\n\nError: {e}",
                         parent=root))
 
         threading.Thread(target=_check_worker, daemon=True).start()
 
-    def show_update_popup(data):
-        win, t2 = _dlg(f"🚀 New Update Available (v{data.get('version', '')})", 520, 390)
-        _lbl(win, f"✨ A new version of {APP_NAME} is available!", t2)
+    def show_offline_prompt(err_msg, on_continue):
+        win = tk.Toplevel(root)
+        win.title(f"{APP_NAME} - Connection Notice")
+        w, h = 500, 240
+        x = max(50, (win.winfo_screenwidth() - w) // 2)
+        y = max(50, (win.winfo_screenheight() - h) // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.resizable(False, False)
+        t2 = T(); win.configure(bg=t2["bg"])
+        win.deiconify(); win.lift(); win.focus_force(); win.grab_set()
 
+        hdr_fr = tk.Frame(win, bg=t2["panel"])
+        hdr_fr.pack(fill="x", padx=16, pady=12)
+        tk.Label(hdr_fr, text="⚠️  Could Not Check for Updates",
+                 bg=t2["panel"], fg=t2["yellow"], font=FONT_TITLE, anchor="w").pack(padx=10, pady=(8,2), fill="x")
+        tk.Label(hdr_fr, text="Unable to connect to the CDM online update server.\nPlease check your internet connection.",
+                 bg=t2["panel"], fg=t2["muted"], font=FONT_UI, anchor="w").pack(padx=10, pady=(0,8), fill="x")
+
+        btn_fr = tk.Frame(win, bg=t2["bg"])
+        btn_fr.pack(fill="x", padx=16, pady=12)
+
+        def do_retry():
+            win.destroy()
+            check_updates(manual=False, on_startup=True, on_success_no_update=on_continue)
+
+        def do_continue():
+            win.destroy()
+            if on_continue:
+                on_continue()
+
+        def do_exit():
+            win.destroy()
+            root.destroy()
+            sys.exit(0)
+
+        tk.Button(btn_fr, text="🔄  Retry", command=do_retry,
+                  bg=t2["btn_bg"], fg=t2["btn_fg"], font=FONT_BOLD, relief="flat", padx=14, pady=6, cursor="hand2").pack(side="left")
+        tk.Button(btn_fr, text="Continue Offline", command=do_continue,
+                  bg=t2["panel"], fg=t2["fg"], font=FONT_UI, relief="flat", padx=12, pady=6, cursor="hand2").pack(side="left", padx=10)
+        tk.Button(btn_fr, text="✕ Exit", command=do_exit,
+                  bg=t2["bg2"], fg=t2["muted"], font=FONT_UI, relief="flat", padx=12, pady=6, cursor="hand2").pack(side="right")
+
+    def show_update_popup(data, mandatory=False):
+        remote_v = data.get("version", "").strip()
+        win = tk.Toplevel(root)
+        win_title = f"🚨 CDM - Critical Update Required (v{remote_v})" if mandatory else f"🚀 CDM - New Update Available (v{remote_v})"
+        win.title(win_title)
+        w, h = 560, 480
+        x = max(50, (win.winfo_screenwidth() - w) // 2)
+        y = max(50, (win.winfo_screenheight() - h) // 2)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.resizable(False, False)
+
+        if os.path.exists(str(BASE_DIR / "assets" / "icon.ico")):
+            try: win.iconbitmap(str(BASE_DIR / "assets" / "icon.ico"))
+            except Exception: pass
+
+        t2 = T()
+        win.configure(bg=t2["bg"])
+        win.deiconify()
+        win.lift()
+        win.attributes("-topmost", True)
+        win.after_idle(win.attributes, "-topmost", False)
+        win.focus_force()
+        win.grab_set()
+
+        def _exit_app():
+            win.destroy()
+            root.destroy()
+            sys.exit(0)
+
+        if mandatory:
+            win.protocol("WM_DELETE_WINDOW", _exit_app)
+        else:
+            win.protocol("WM_DELETE_WINDOW", win.destroy)
+
+        # Header banner
+        hdr_fr = tk.Frame(win, bg=t2["panel"])
+        hdr_fr.pack(fill="x", padx=14, pady=(12, 6))
+
+        title_lbl = f"🚨 Critical Update Required! (v{remote_v})" if mandatory else f"✨ New Version of {APP_NAME} Available!"
+        title_col = t2["red"] if mandatory else t2["accent"]
+        tk.Label(hdr_fr, text=title_lbl, bg=t2["panel"], fg=title_col, font=FONT_TITLE, anchor="w").pack(padx=10, pady=(8, 2), fill="x")
+
+        sub_text = "You must install this update to continue using CDM." if mandatory else "A new version with performance improvements is ready to install."
+        tk.Label(hdr_fr, text=sub_text, bg=t2["panel"], fg=t2["muted"], font=FONT_UI, anchor="w").pack(padx=10, pady=(0, 8), fill="x")
+
+        # Version & info row
         info_fr = tk.Frame(win, bg=t2["panel"])
-        info_fr.pack(fill="x", padx=14, pady=6)
-        tk.Label(info_fr, text=f"Current: v{VERSION}  ➔  New: v{data.get('version','')}",
-                 bg=t2["panel"], fg=t2["green"], font=FONT_TITLE, anchor="w").pack(padx=10, pady=6)
-        if data.get("release_date"):
-            tk.Label(info_fr, text=f"Released: {data.get('release_date')}",
-                     bg=t2["panel"], fg=t2["muted"], font=FONT_UI, anchor="w").pack(padx=10, pady=(0, 6))
+        info_fr.pack(fill="x", padx=14, pady=4)
+        tk.Label(info_fr, text=f"Installed Version: v{VERSION}  ➔  New Version: v{remote_v}",
+                 bg=t2["panel"], fg=t2["green"], font=FONT_TITLE, anchor="w").pack(padx=10, pady=(6, 2), fill="x")
+
+        rel_date = data.get("release_date", "")
+        min_os = data.get("min_os", "Windows 10 / 11")
+        tk.Label(info_fr, text=f"Release Date: {rel_date}  |  Supported: {min_os}",
+                 bg=t2["panel"], fg=t2["muted"], font=FONT_UI, anchor="w").pack(padx=10, pady=(0, 6), fill="x")
 
         _lbl(win, "What's new in this release:", t2)
         txt = tk.Text(win, height=6, bg=t2["field"], fg=t2["fg"], font=FONT_UI, relief="flat", bd=4)
@@ -1844,23 +1958,95 @@ def launch_gui():
             txt.insert("end", str(changelog))
         txt.configure(state="disabled")
 
-        dl_url = data.get("download_url", "")
+        # Progress frame (initially hidden)
+        prog_fr = tk.Frame(win, bg=t2["bg"])
+        prog_status = tk.Label(prog_fr, text="Preparing download...", bg=t2["bg"], fg=t2["fg"], font=FONT_BOLD, anchor="w")
+        prog_status.pack(fill="x", padx=14, pady=(4, 2))
+        prog_bar = ttk.Progressbar(prog_fr, orient="horizontal", mode="determinate", maximum=100)
+        prog_bar.pack(fill="x", padx=14, pady=4)
+        prog_detail = tk.Label(prog_fr, text="0 MB / 0 MB • 0 KB/s", bg=t2["bg"], fg=t2["muted"], font=FONT_UI, anchor="w")
+        prog_detail.pack(fill="x", padx=14, pady=(2, 6))
 
-        def do_dl():
-            win.destroy()
-            if dl_url:
-                add_task(dl_url, filename=os.path.basename(urllib.parse.urlparse(dl_url).path) or "VnA_Update.exe")
-                messagebox.showinfo("Update Downloading",
-                                    "The update is downloading in the VnA Download Manager queue!\nWhen finished, run the installer to complete the update.", parent=root)
-            else:
-                messagebox.showinfo("Update", "Download link not found in update.json", parent=root)
+        dl_url = data.get("download_url", "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.0.exe")
 
+        # Buttons frame
         btn_fr = tk.Frame(win, bg=t2["bg"])
         btn_fr.pack(fill="x", padx=14, pady=10)
-        tk.Button(btn_fr, text="⬇  Download & Install Update", command=do_dl,
+
+        def do_download_and_install():
+            btn_fr.pack_forget()
+            prog_fr.pack(fill="x", padx=14, pady=10)
+
+            def _worker():
+                try:
+                    prog_status.configure(text=f"Connecting to update server...")
+                    temp_dir = tempfile.gettempdir()
+                    fname = os.path.basename(urllib.parse.urlparse(dl_url).path) or f"CDM_Setup_v{remote_v}.exe"
+                    dest_file = os.path.join(temp_dir, fname)
+
+                    req = urllib.request.Request(dl_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CDM-Updater/2.0"})
+                    try:
+                        ctx = ssl.create_default_context()
+                        resp = urllib.request.urlopen(req, timeout=30, context=ctx)
+                    except Exception:
+                        ctx = ssl._create_unverified_context()
+                        resp = urllib.request.urlopen(req, timeout=30, context=ctx)
+
+                    with resp:
+                        total_bytes = int(resp.headers.get("Content-Length", 0))
+                        downloaded = 0
+                        start_time = time.time()
+                        last_update = 0
+
+                        with open(dest_file, "wb") as f:
+                            while True:
+                                chunk = resp.read(65536)
+                                if not chunk:
+                                    break
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                now = time.time()
+                                if now - last_update >= 0.1 or downloaded == total_bytes:
+                                    last_update = now
+                                    elapsed = now - start_time
+                                    spd = downloaded / elapsed if elapsed > 0 else 0
+                                    pct = int((downloaded / total_bytes * 100)) if total_bytes > 0 else 0
+                                    det_text = f"{human_size(downloaded)} / {human_size(total_bytes)} ({pct}%) • {human_speed(spd)}"
+                                    win.after(0, lambda p=pct, d=det_text: (
+                                        prog_bar.configure(value=p),
+                                        prog_status.configure(text=f"Downloading CDM v{remote_v} Update ({p}%)..."),
+                                        prog_detail.configure(text=d)
+                                    ))
+
+                    win.after(0, lambda: prog_status.configure(text="✅ Download complete! Launching installer...", fg=t2["green"]))
+                    time.sleep(1.0)
+
+                    # Launch the installer
+                    try:
+                        os.startfile(dest_file)
+                    except Exception:
+                        subprocess.Popen([dest_file], shell=False)
+
+                    # Terminate current CDM instance
+                    win.after(0, _exit_app)
+                except Exception as ex:
+                    def _show_err(err=str(ex)):
+                        messagebox.showerror("Update Download Failed", f"Could not download update:\n{err}", parent=win)
+                        prog_fr.pack_forget()
+                        btn_fr.pack(fill="x", padx=14, pady=10)
+                    win.after(0, _show_err)
+
+            threading.Thread(target=_worker, daemon=True).start()
+
+        tk.Button(btn_fr, text="⬇  Download & Install Update Now", command=do_download_and_install,
                   bg=t2["green"], fg="#ffffff", font=FONT_BOLD, relief="flat", padx=16, pady=7, cursor="hand2").pack(side="left")
-        tk.Button(btn_fr, text="Remind Me Later", command=win.destroy,
-                  bg=t2["btn_bg"], fg=t2["btn_fg"], font=FONT_UI, relief="flat", padx=12, pady=7, cursor="hand2").pack(side="right")
+
+        if mandatory:
+            tk.Button(btn_fr, text="✕  Exit CDM", command=_exit_app,
+                      bg=t2["red"], fg="#ffffff", font=FONT_BOLD, relief="flat", padx=14, pady=7, cursor="hand2").pack(side="right")
+        else:
+            tk.Button(btn_fr, text="Remind Me Later", command=win.destroy,
+                      bg=t2["btn_bg"], fg=t2["btn_fg"], font=FONT_UI, relief="flat", padx=12, pady=7, cursor="hand2").pack(side="right")
 
     # ══════════════════════════════════════════════════════════════════════════
     # DRAW HELPERS
@@ -2046,14 +2232,16 @@ def launch_gui():
         clip_mon.start()
 
     # ══════════════════════════════════════════════════════════════════════════
-    # ACTIVATION & TRIAL CHECK (Prompt on first launch if not activated)
+    # STARTUP CHECK (MANDATORY UPDATE FIRST, THEN ACTIVATION & ACCESS)
     # ══════════════════════════════════════════════════════════════════════════
-    if not trial.is_valid:
-        root.after(100, lambda: activate_dialog(mandatory=True))
+    def on_startup_allow_access():
+        root.deiconify()
+        root.lift()
+        if not trial.is_valid:
+            root.after(150, lambda: activate_dialog(mandatory=True))
 
-    # Auto-check updates online via GitHub update.json
-    if settings.get("auto_update_check", True):
-        root.after(2000, lambda: check_updates(manual=False))
+    # Always check for mandatory updates on launch immediately
+    root.after(50, lambda: check_updates(manual=False, on_startup=True, on_success_no_update=on_startup_allow_access))
 
     # ══════════════════════════════════════════════════════════════════════════
     # MAIN REFRESH LOOP

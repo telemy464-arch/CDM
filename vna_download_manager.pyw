@@ -1858,7 +1858,7 @@ def launch_gui():
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.resizable(False, False)
         t2 = T(); win.configure(bg=t2["bg"])
-        win.lift(); win.focus_force(); win.grab_set()
+        win.deiconify(); win.lift(); win.focus_force(); win.grab_set()
 
         hdr_fr = tk.Frame(win, bg=t2["panel"])
         hdr_fr.pack(fill="x", padx=16, pady=12)
@@ -1908,6 +1908,7 @@ def launch_gui():
 
         t2 = T()
         win.configure(bg=t2["bg"])
+        win.deiconify()
         win.lift()
         win.attributes("-topmost", True)
         win.after_idle(win.attributes, "-topmost", False)
@@ -1966,7 +1967,7 @@ def launch_gui():
         prog_detail = tk.Label(prog_fr, text="0 MB / 0 MB • 0 KB/s", bg=t2["bg"], fg=t2["muted"], font=FONT_UI, anchor="w")
         prog_detail.pack(fill="x", padx=14, pady=(2, 6))
 
-        dl_url = data.get("download_url", "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/Output/CDM_Setup_v2.0.exe")
+        dl_url = data.get("download_url", "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.0.exe")
 
         # Buttons frame
         btn_fr = tk.Frame(win, bg=t2["bg"])

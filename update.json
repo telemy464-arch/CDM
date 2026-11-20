@@ -2,7 +2,7 @@
   "app_name": "CDM - Cloud Download Manager",
   "version": "2.1.0",
   "release_date": "2026-11-21",
-  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/Output/CDM_Setup_v2.0.exe",
+  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.0.exe",
   "changelog": [
     "🚀 New Super Fast Download Engine optimizations",
     "🎨 Official CDM brand logo and clean Light theme integration",
