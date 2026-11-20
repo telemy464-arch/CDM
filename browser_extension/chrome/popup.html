@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VnA Download Manager</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width:300px; min-height:220px;
+    font-family:'Segoe UI',sans-serif;
+    background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);
+    color:#e0e0e0;
+  }
+  .header {
+    background:linear-gradient(90deg,#e94560,#533483);
+    padding:14px 16px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .header h1 { font-size:15px; font-weight:700; }
+  .header .version { font-size:10px; opacity:0.8; margin-top:2px; }
+  .body { padding:16px; }
+  .toggle-row {
+    display:flex; align-items:center; justify-content:space-between;
+    background:#0f3460; border-radius:10px; padding:12px 14px; margin-bottom:12px;
+  }
+  .toggle-label { font-size:13px; }
+  .toggle-sub { font-size:10px; color:#888; margin-top:2px; }
+  .switch { position:relative; width:44px; height:24px; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slider {
+    position:absolute; cursor:pointer; inset:0;
+    background:#2a2a4a; border-radius:24px; transition:.3s;
+  }
+  .slider:before {
+    content:''; position:absolute; height:18px; width:18px;
+    left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s;
+  }
+  input:checked + .slider { background:linear-gradient(90deg,#e94560,#533483); }
+  input:checked + .slider:before { transform:translateX(20px); }
+
+  .url-row { margin-bottom:10px; }
+  .url-input {
+    width:100%; padding:8px 10px; border-radius:7px;
+    background:#0f1b35; border:1px solid #1e3a5f;
+    color:#e0e0e0; font-size:12px; outline:none;
+  }
+  .url-input::placeholder { color:#555; }
+  .btn-dl {
+    width:100%; padding:10px; border:none; border-radius:8px;
+    background:linear-gradient(90deg,#e94560,#533483);
+    color:#fff; font-size:13px; font-weight:700;
+    cursor:pointer; transition:.2s;
+    margin-bottom:8px;
+  }
+  .btn-dl:hover { opacity:0.9; transform:translateY(-1px); }
+  .status {
+    text-align:center; font-size:11px; color:#888;
+    padding:4px; border-radius:5px;
+  }
+  .status.ok { color:#00c851; }
+  .status.err { color:#ff4444; }
+  .footer {
+    padding:8px 16px; border-top:1px solid #1e3a5f;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .footer span { font-size:10px; color:#555; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#00c851; }
+  .dot.off { background:#ff4444; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>⬇ VnA Download Manager</h1>
+    <div class="version">v2.0 — Browser Extension</div>
+  </div>
+</div>
+
+<div class="body">
+  <div class="toggle-row">
+    <div>
+      <div class="toggle-label">Extension Active</div>
+      <div class="toggle-sub">Intercept browser downloads</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="toggleExt" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="url-row">
+    <input class="url-input" type="text" id="urlInput" placeholder="Paste URL here...">
+  </div>
+
+  <button class="btn-dl" id="btnDl">⬇  Download with VnA</button>
+  <div class="status" id="status">VnA app must be running</div>
+</div>
+
+<div class="footer">
+  <span>VnA Download Manager Helper</span>
+  <div class="dot" id="connDot"></div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

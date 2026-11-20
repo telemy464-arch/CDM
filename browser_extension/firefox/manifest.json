@@ -1,0 +1,27 @@
+{
+  "manifest_version": 2,
+  "name": "VnA Download Manager Helper",
+  "version": "2.0",
+  "description": "Automatically send downloads to VnA Download Manager",
+  "permissions": [
+    "downloads", "contextMenus", "tabs", "activeTab",
+    "storage", "notifications", "webRequest", "webRequestBlocking",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": { "48": "icons/icon48.png" }
+  },
+  "icons": { "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}

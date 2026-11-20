@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.spec.bak
+
+# PyInstaller / Build
+build/
+
+# Local User Data
+.trial
+stats.json
+queue.json
+*.log
+
+# Windows
+Thumbs.db
+Desktop.ini
