@@ -32,14 +32,15 @@ SolidCompression=yes
 WizardStyle=modern
 DisableWelcomePage=no
 DisableProgramGroupPage=auto
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
 ArchitecturesInstallIn64BitMode=x64compatible
 ChangesAssociations=yes
 ChangesEnvironment=no
-CloseApplications=yes
+CloseApplications=force
+CloseApplicationsFilter=*.exe
 RestartApplications=no
 
 [Languages]
@@ -167,6 +168,7 @@ var
   iResultCode: Integer;
 begin
   Exec('taskkill.exe', '/F /IM CDM.exe /T', '', SW_HIDE, ewWaitUntilTerminated, iResultCode);
+  Sleep(500);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -174,7 +176,5 @@ begin
   if (CurStep=ssInstall) then
   begin
     KillRunningApp();
-    if (IsUpgrade()) then
-      UnInstallOldVersion();
   end;
 end;

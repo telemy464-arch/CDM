@@ -1522,43 +1522,71 @@ def launch_gui():
         _btn(win,"📦  Add All",do,t2)
 
     # ── Playlist ──────────────────────────────────────────────────────────────
-    def playlist_dialog():
-        win,t2 = _dlg("Playlist / YouTube Download",560,370)
-        _lbl(win,"URL (YouTube, playlist, any yt-dlp supported site):",t2)
-        url_e=_ent(win,t2)
+    def playlist_dialog(prefill_url=None):
+        win,t2 = _dlg("🎬 Video / YouTube Download - CDM", 580, 430)
+        win.deiconify()
+        win.lift()
+        win.attributes("-topmost", True)
+        win.after_idle(win.attributes, "-topmost", False)
+        _lbl(win, "Video URL (YouTube, Facebook, Twitter, TikTok, etc.):", t2)
+        url_e = _ent(win, t2)
+        if prefill_url:
+            url_e.insert(0, prefill_url)
 
-        _lbl(win,"Quality:",t2)
-        fr=tk.Frame(win,bg=t2["bg"]); fr.pack(fill="x",padx=14)
-        q_var=tk.StringVar(value=settings.get("yt_quality","best"))
-        for q in ["best", "1080p", "720p", "480p", "360p", "audio"]:
-            tk.Radiobutton(fr,text=q,variable=q_var,value=q,
-                           bg=t2["bg"],fg=t2["fg"],selectcolor=t2["field"],
-                           activebackground=t2["bg"],font=FONT_UI).pack(side="left",padx=5)
+        _lbl(win, "Select Resolution / Video Quality:", t2)
+        fr = tk.Frame(win, bg=t2["bg"])
+        fr.pack(fill="x", padx=14, pady=2)
+        q_var = tk.StringVar(value=settings.get("yt_quality", "best"))
 
-        _lbl(win,"Format:",t2)
-        fr2=tk.Frame(win,bg=t2["bg"]); fr2.pack(fill="x",padx=14)
-        fmt_var=tk.StringVar(value=settings.get("yt_format","mp4"))
-        for f in ["mp4","mkv","webm","mp3"]:
-            tk.Radiobutton(fr2,text=f,variable=fmt_var,value=f,
-                           bg=t2["bg"],fg=t2["fg"],selectcolor=t2["field"],
-                           activebackground=t2["bg"],font=FONT_UI).pack(side="left",padx=5)
+        qualities = [
+            ("best", "🌟 Best (Max)"),
+            ("4k", "4K (2160p)"),
+            ("2k", "2K (1440p)"),
+            ("1080p", "1080p (Full HD)"),
+            ("720p", "720p (HD)"),
+            ("480p", "480p (SD)"),
+            ("360p", "360p")
+        ]
 
-        audio_var=tk.BooleanVar(value=False)
-        tk.Checkbutton(win,text="🎵 Audio only (MP3)",variable=audio_var,
-                       bg=t2["bg"],fg=t2["fg"],selectcolor=t2["field"],
-                       activebackground=t2["bg"],font=FONT_UI).pack(anchor="w",padx=14,pady=4)
+        row1 = tk.Frame(fr, bg=t2["bg"])
+        row1.pack(fill="x", pady=2)
+        for val, label in qualities[:4]:
+            tk.Radiobutton(row1, text=label, variable=q_var, value=val,
+                           bg=t2["bg"], fg=t2["fg"], selectcolor=t2["field"],
+                           activebackground=t2["bg"], font=FONT_UI).pack(side="left", padx=6)
+
+        row2 = tk.Frame(fr, bg=t2["bg"])
+        row2.pack(fill="x", pady=2)
+        for val, label in qualities[4:]:
+            tk.Radiobutton(row2, text=label, variable=q_var, value=val,
+                           bg=t2["bg"], fg=t2["fg"], selectcolor=t2["field"],
+                           activebackground=t2["bg"], font=FONT_UI).pack(side="left", padx=6)
+
+        _lbl(win, "Video Format:", t2)
+        fr2 = tk.Frame(win, bg=t2["bg"])
+        fr2.pack(fill="x", padx=14, pady=2)
+        fmt_var = tk.StringVar(value=settings.get("yt_format", "mp4"))
+        for f in ["mp4", "mkv", "webm", "mp3"]:
+            tk.Radiobutton(fr2, text=f.upper(), variable=fmt_var, value=f,
+                           bg=t2["bg"], fg=t2["fg"], selectcolor=t2["field"],
+                           activebackground=t2["bg"], font=FONT_UI).pack(side="left", padx=8)
+
+        audio_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(win, text="🎵 Audio Only (Extract MP3)", variable=audio_var,
+                       bg=t2["bg"], fg=t2["fg"], selectcolor=t2["field"],
+                       activebackground=t2["bg"], font=FONT_BOLD).pack(anchor="w", padx=14, pady=6)
 
         def do():
-            url=url_e.get().strip()
+            url = url_e.get().strip()
             if not url: return
-            settings["yt_quality"]=q_var.get()
-            settings["yt_format"]=fmt_var.get()
-            save_json(SETTINGS_FILE,settings)
-            add_task(url,is_ytdlp=True,quality=q_var.get(),
-                     fmt=fmt_var.get(),audio_only=audio_var.get())
+            settings["yt_quality"] = q_var.get()
+            settings["yt_format"] = fmt_var.get()
+            save_json(SETTINGS_FILE, settings)
+            add_task(url, is_ytdlp=True, quality=q_var.get(),
+                     fmt=fmt_var.get(), audio_only=audio_var.get())
             win.destroy()
 
-        _btn(win,"🎞️  Download",do,t2)
+        _btn(win, "⬇  Start Download", do, t2)
         url_e.focus()
 
     # ── Site Grabber ──────────────────────────────────────────────────────────
@@ -2097,17 +2125,51 @@ def launch_gui():
                                         prog_detail.configure(text=d)
                                     ))
 
-                    win.after(0, lambda: prog_status.configure(text="✅ Download complete! Launching installer...", fg=t2["green"]))
-                    time.sleep(1.0)
+                    win.after(0, lambda: (
+                        prog_status.configure(text="⚡ Applying update & restarting CDM...", fg=t2["green"]),
+                        prog_detail.configure(text="Please wait, CDM will restart automatically...")
+                    ))
+                    time.sleep(0.8)
 
-                    # Launch the installer
+                    # Build silent auto-update batch script
+                    updater_bat = os.path.join(temp_dir, "cdm_auto_updater.bat")
+                    current_exe = sys.executable if getattr(sys, 'frozen', False) else ""
+
+                    bat_code = f"""@echo off
+chcp 65001 >nul
+timeout /t 1 /nobreak >nul
+taskkill /f /im CDM.exe >nul 2>&1
+timeout /t 1 /nobreak >nul
+taskkill /f /im CDM.exe >nul 2>&1
+
+:: Run Inno Setup installer 100% silently in background
+start /wait "" "{dest_file}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+
+:: Restart CDM
+if exist "{current_exe}" (
+    start "" "{current_exe}"
+) else if exist "%ProgramFiles%\\CDM\\CDM.exe" (
+    start "" "%ProgramFiles%\\CDM\\CDM.exe"
+) else if exist "%LocalAppData%\\Programs\\CDM\\CDM.exe" (
+    start "" "%LocalAppData%\\Programs\\CDM\\CDM.exe"
+)
+
+del "%~f0" >nul 2>&1
+"""
+                    with open(updater_bat, "w", encoding="utf-8") as f:
+                        f.write(bat_code)
+
+                    # Launch with PowerShell elevation so it can overwrite in Program Files
+                    ps_cmd = f'Start-Process -FilePath "cmd.exe" -ArgumentList \'/c "{updater_bat}"\' -WindowStyle Hidden -Verb RunAs'
                     try:
-                        os.startfile(dest_file)
+                        subprocess.Popen(["powershell", "-NoProfile", "-Command", ps_cmd],
+                                         creationflags=0x08000000)
                     except Exception:
-                        subprocess.Popen([dest_file], shell=False)
+                        subprocess.Popen(["cmd.exe", "/c", updater_bat],
+                                         creationflags=0x08000000)
 
-                    # Terminate current CDM instance
-                    win.after(0, _exit_app)
+                    time.sleep(0.3)
+                    os._exit(0)
                 except Exception as ex:
                     def _show_err(err=str(ex)):
                         messagebox.showerror("Update Download Failed", f"Could not download update:\n{err}", parent=win)
@@ -2295,7 +2357,10 @@ def launch_gui():
     # ══════════════════════════════════════════════════════════════════════════
     ext_server = ExtensionServer(EXT_PORT)
     def on_ext_url(url, referer):
-        root.after(0, lambda: add_task(url, referer=referer))
+        if is_video_stream_url(url):
+            root.after(0, lambda: playlist_dialog(prefill_url=url))
+        else:
+            root.after(0, lambda: add_dialog(prefill_url=url))
     ext_server.on_url = on_ext_url
     ext_server.start()
 
@@ -2304,7 +2369,10 @@ def launch_gui():
     # ══════════════════════════════════════════════════════════════════════════
     def on_clip(url):
         if settings.get("clipboard_monitor") and not settings.get("silent_mode"):
-            root.after(0, lambda: (show_clip_banner(url), add_dialog(prefill_url=url)))
+            if is_video_stream_url(url):
+                root.after(0, lambda: (show_clip_banner(url), playlist_dialog(prefill_url=url)))
+            else:
+                root.after(0, lambda: (show_clip_banner(url), add_dialog(prefill_url=url)))
 
     clip_mon = ClipboardMonitor(on_clip)
     if settings.get("clipboard_monitor", True):
