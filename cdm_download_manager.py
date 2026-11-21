@@ -50,7 +50,7 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.0"
+VERSION         = "2.3.1"
 BUILD_DATE      = "2026-11-22"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
@@ -114,11 +114,12 @@ DOWNLOAD_EXTENSIONS = {
 }
 
 VIDEO_URL_PATTERNS = (
-    "youtube.com/watch", "youtu.be/", "youtube.com/shorts", "youtube.com/live",
-    "facebook.com/watch", "facebook.com/reel", "fb.watch",
-    "instagram.com/reel", "instagram.com/tv",
+    "youtube.com/watch", "youtu.be/", "youtube.com/shorts", "youtube.com/live", "youtube.com/embed",
+    "facebook.com/watch", "facebook.com/reel", "facebook.com/share", "fb.watch", "fb.com/",
+    "instagram.com/reel", "instagram.com/p/", "instagram.com/tv",
     "tiktok.com/", "twitter.com/", "x.com/",
-    "vimeo.com/", "dailymotion.com/video"
+    "vimeo.com/", "dailymotion.com/video", "twitch.tv/", "bilibili.com/video",
+    "threads.net/@", "reddit.com/r/"
 )
 
 def is_downloadable_link(text):
@@ -569,7 +570,11 @@ class DownloadTask:
             self.filepath = os.path.join(os.path.dirname(self.filepath), self.filename)
             self.parts_dir = self.filepath + ".cdm-parts"
             i += 1
-        headers = {"User-Agent":"CDM-CloudDownloadManager/2.0"}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,application/octet-stream,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
         if self.referer: headers["Referer"] = self.referer
         opener = self._make_opener()
         size = None; supports_range = False
@@ -580,12 +585,24 @@ class DownloadTask:
                 size = int(cl) if cl else None
                 supports_range = "bytes" in (resp.headers.get("Accept-Ranges") or "")
                 cd = resp.headers.get("Content-Disposition") or ""
-                if "filename=" in cd and not self._user_filename:
-                    fn = cd.split("filename=")[1].strip().strip('"')
-                    if fn:
-                        self.filename = fn
-                        self.filepath = os.path.join(os.path.dirname(self.filepath), self.filename)
-                        self.parts_dir = self.filepath + ".cdm-parts"
+                if "filename*=" in cd and not self._user_filename:
+                    m = re.search(r"filename\*=UTF-8''([^;]+)", cd, re.I)
+                    if m:
+                        fn = urllib.parse.unquote(m.group(1).strip().strip('"\''))
+                        if fn:
+                            self.filename = fn
+                            self.category = category_for(self.filename)
+                            self.filepath = os.path.join(self.save_dir, self.category, self.filename)
+                            self.parts_dir = self.filepath + ".cdm-parts"
+                elif "filename=" in cd and not self._user_filename:
+                    m = re.search(r'filename=["\']?([^"\';]+)["\']?', cd)
+                    if m:
+                        fn = m.group(1).strip().strip('"\'')
+                        if fn:
+                            self.filename = fn
+                            self.category = category_for(self.filename)
+                            self.filepath = os.path.join(self.save_dir, self.category, self.filename)
+                            self.parts_dir = self.filepath + ".cdm-parts"
         except Exception:
             try:
                 req2 = urllib.request.Request(self.url, headers={**headers,"Range":"bytes=0-0"})
@@ -669,7 +686,11 @@ class DownloadTask:
 
     def _download_part(self, part, attempt=0):
         try:
-            headers = {"User-Agent":"CDM-CloudDownloadManager/2.0"}
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
             if self.referer: headers["Referer"] = self.referer
             if part["range"]:
                 headers["Range"] = f"bytes={part['start']+part['done']}-{part['end']}"
@@ -744,29 +765,31 @@ class DownloadTask:
 # YT-DLP WRAPPER (Playlist / Video Quality)
 # ═══════════════════════════════════════════════════════════════════════════════
 class YtDlpTask:
-    """Wraps yt-dlp for playlist/video quality downloads."""
+    """Wraps yt-dlp for video and audio streaming downloads (YouTube, Facebook, TikTok, etc.)."""
     def __init__(self, url, save_dir, quality="best", fmt="mp4",
-                 audio_only=False, proxy=""):
-        self.url        = url
-        self.save_dir   = save_dir
-        self.quality    = quality
-        self.fmt        = fmt
-        self.audio_only = audio_only
-        self.proxy      = proxy
-        self.status     = "queued"
-        self.filename   = ""
-        self.progress   = 0.0
-        self.size       = None
-        self.downloaded = 0
-        self._speed     = 0.0
-        self.error_msg  = ""
-        self.added_at   = time.time()
-        self.finished_at= None
-        self.category   = "Music" if audio_only else "Video"
-        self._proc      = None
-        self._lock      = threading.Lock()
-        self.on_complete= None
-        self._stop_ev   = threading.Event()
+                 audio_only=False, proxy="", filename=""):
+        self.url            = url.strip()
+        self.save_dir       = save_dir
+        self.quality        = quality
+        self.fmt            = fmt or "mp4"
+        self.audio_only     = audio_only
+        self.proxy          = proxy
+        self.status         = "queued"
+        self.filename       = filename or ""
+        self.filepath       = ""
+        self.progress       = 0.0
+        self.size           = None
+        self.downloaded     = 0
+        self._speed         = 0.0
+        self.error_msg      = ""
+        self.added_at       = time.time()
+        self.finished_at    = None
+        self.category       = "Music" if (audio_only or str(fmt).lower() == "mp3") else "Video"
+        self.supports_range = True
+        self._proc          = None
+        self._lock          = threading.Lock()
+        self.on_complete    = None
+        self._stop_ev       = threading.Event()
 
     def start(self):
         threading.Thread(target=self._run, daemon=True).start()
@@ -774,8 +797,10 @@ class YtDlpTask:
     def stop(self):
         self._stop_ev.set()
         if self._proc:
-            try: self._proc.terminate()
-            except Exception: pass
+            try:
+                self._proc.terminate()
+            except Exception:
+                pass
         self.status = "stopped"
 
     def pause(self):
@@ -790,15 +815,24 @@ class YtDlpTask:
         self.status = "downloading"
         ytdlp = shutil.which("yt-dlp") or shutil.which("yt-dlp.exe")
         if not ytdlp:
-            for cand in [BASE_DIR / "yt-dlp.exe", BASE_DIR / "bin" / "yt-dlp.exe", Path(os.environ.get("LOCALAPPDATA","")) / "Programs" / "yt-dlp" / "yt-dlp.exe"]:
+            for cand in [
+                BASE_DIR / "yt-dlp.exe",
+                BASE_DIR / "bin" / "yt-dlp.exe",
+                Path(os.environ.get("LOCALAPPDATA","")) / "Programs" / "yt-dlp" / "yt-dlp.exe",
+                Path(os.environ.get("LOCALAPPDATA","")) / "Programs" / "Python" / "Python312" / "Scripts" / "yt-dlp.exe"
+            ]:
                 if os.path.exists(str(cand)):
                     ytdlp = str(cand)
                     break
+
         if not ytdlp or not os.path.exists(str(ytdlp)):
             # Auto-download yt-dlp if not found
             try:
                 dest = str(BASE_DIR / "yt-dlp.exe")
-                req = urllib.request.Request("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe", headers={"User-Agent":"Mozilla/5.0 CDM-Downloader/2.0"})
+                req = urllib.request.Request(
+                    "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe",
+                    headers={"User-Agent": "Mozilla/5.0 CDM-Downloader/2.0"}
+                )
                 with urllib.request.urlopen(req, timeout=30) as r, open(dest, "wb") as f:
                     f.write(r.read())
                 ytdlp = dest
@@ -809,67 +843,167 @@ class YtDlpTask:
             self.status = "error"
             self.error_msg = "yt-dlp not found. Install it from yt-dlp.org"
             return
-        cmd = [str(ytdlp)]
-        if self.audio_only:
-            cmd += ["-x", "--audio-format", "mp3", "-q"]
+
+        cmd = [
+            str(ytdlp),
+            "--no-playlist",
+            "--newline",
+            "--no-mtime",
+            "--no-colors",
+            "--encoding", "utf-8",
+        ]
+
+        if self.audio_only or str(self.fmt).lower() == "mp3":
+            cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
         else:
             q_map = {
                 "best": "bestvideo+bestaudio/best",
-                "4k": "bestvideo[height<=2160]+bestaudio/best",
-                "2k": "bestvideo[height<=1440]+bestaudio/best",
-                "1080p": "bestvideo[height<=1080]+bestaudio/best",
-                "720p": "bestvideo[height<=720]+bestaudio/best",
-                "480p": "bestvideo[height<=480]+bestaudio/best",
-                "360p": "bestvideo[height<=360]+bestaudio/best",
+                "4k": "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best",
+                "2k": "bestvideo[height<=1440]+bestaudio/best[height<=1440]/best",
+                "1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+                "720p": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+                "480p": "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
+                "360p": "bestvideo[height<=360]+bestaudio/best[height<=360]/best",
                 "audio": "bestaudio/best"
             }
             fmt_str = q_map.get(str(self.quality).lower(), "bestvideo+bestaudio/best")
             cmd += ["-f", fmt_str, "--merge-output-format", self.fmt]
 
-        # Locate ffmpeg for high-resolution video/audio merging
+        # Locate ffmpeg for audio/video stream merging
         ffmpeg_loc = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
         if not ffmpeg_loc:
-            for cand in [BASE_DIR / "ffmpeg.exe", BASE_DIR / "bin" / "ffmpeg.exe", Path(os.environ.get("LOCALAPPDATA","")) / "Programs" / "ffmpeg" / "bin" / "ffmpeg.exe"]:
+            cands = [
+                BASE_DIR / "ffmpeg.exe",
+                BASE_DIR / "bin" / "ffmpeg.exe",
+                Path(os.environ.get("LOCALAPPDATA","")) / "Programs" / "ffmpeg" / "bin" / "ffmpeg.exe"
+            ]
+            winget_dir = Path(os.environ.get("LOCALAPPDATA","")) / "Microsoft" / "WinGet" / "Packages"
+            if winget_dir.exists():
+                try:
+                    cands.extend(winget_dir.glob("**/ffmpeg.exe"))
+                except Exception:
+                    pass
+            for cand in cands:
                 if os.path.exists(str(cand)):
                     ffmpeg_loc = str(cand)
                     break
+
         if ffmpeg_loc:
             cmd += ["--ffmpeg-location", str(ffmpeg_loc)]
 
-        if self.proxy: cmd += ["--proxy", self.proxy]
+        if self.proxy:
+            cmd += ["--proxy", self.proxy]
+
+        save_folder = os.path.join(self.save_dir, self.category)
+        os.makedirs(save_folder, exist_ok=True)
+
         cmd += [
-            "--no-mtime",
-            "--newline", "--progress-template",
-            "%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(filename)s",
-            "-o", os.path.join(self.save_dir, "Video", "%(title)s.%(ext)s"),
+            "--print", "METADATA:%(title)s|%(filesize_approx,filesize)s|%(ext)s",
+            "--print", "after_move:FINAL:%(filepath)s",
+            "--progress-template", "download:PROG:%(progress.downloaded_bytes)s|%(progress.total_bytes,progress.total_bytes_estimate)s|%(progress._percent_str)s|%(progress._speed_str)s|%(progress.filename)s",
+            "-o", os.path.join(save_folder, "%(title)s.%(ext)s"),
             self.url
         ]
+
+        # Hide any console window on Windows
+        no_window = 0x08000000 if sys.platform == "win32" else 0
+        startupinfo = None
+        if sys.platform == "win32":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+
         try:
-            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                          stderr=subprocess.STDOUT, text=True)
+            self._proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                creationflags=no_window,
+                startupinfo=startupinfo,
+                encoding="utf-8",
+                errors="replace"
+            )
+
             for line in self._proc.stdout:
-                if self._stop_ev.is_set(): break
+                if self._stop_ev.is_set():
+                    break
                 line = line.strip()
-                if "|" in line:
-                    parts = line.split("|")
+                if not line:
+                    continue
+
+                if line.startswith("METADATA:"):
+                    parts = line[9:].split("|")
                     try:
-                        pct = parts[0].replace("%","").strip()
-                        self.progress = float(pct) / 100.0
-                        self._speed   = self._parse_speed(parts[1])
-                        if len(parts) > 3:
-                            self.filename = os.path.basename(parts[3])
-                    except Exception: pass
+                        title_clean = parts[0].strip()
+                        if title_clean:
+                            ext_clean = parts[2].strip() if len(parts) > 2 and parts[2].strip() else self.fmt
+                            self.filename = f"{title_clean}.{ext_clean}"
+                            self.filepath = os.path.join(save_folder, self.filename)
+                        if len(parts) > 1 and parts[1].strip().isdigit():
+                            sz_val = int(parts[1].strip())
+                            if sz_val > 0:
+                                self.size = sz_val
+                    except Exception:
+                        pass
+                elif line.startswith("PROG:"):
+                    parts = line[5:].split("|")
+                    try:
+                        if len(parts) >= 1 and parts[0].strip().isdigit():
+                            self.downloaded = int(parts[0].strip())
+                        if len(parts) >= 2 and parts[1].strip().isdigit():
+                            tot = int(parts[1].strip())
+                            if tot > 0:
+                                self.size = tot
+                        if len(parts) >= 3:
+                            pct_clean = re.sub(r'[^\d.]', '', parts[2])
+                            if pct_clean:
+                                self.progress = float(pct_clean) / 100.0
+                        if self.size and self.downloaded:
+                            self.progress = min(1.0, max(0.0, self.downloaded / self.size))
+                        if len(parts) >= 4:
+                            self._speed = self._parse_speed(parts[3])
+                        if len(parts) >= 5 and parts[4].strip() and not self.filename:
+                            self.filename = os.path.basename(parts[4].strip())
+                            self.filepath = parts[4].strip()
+                    except Exception:
+                        pass
+                elif line.startswith("FINAL:"):
+                    fin = line[6:].strip()
+                    if fin and fin != "NA":
+                        self.filepath = fin
+                        self.filename = os.path.basename(fin)
+
             self._proc.wait()
             if self._proc.returncode == 0:
                 self.status = "completed"
                 self.progress = 1.0
                 self.finished_at = time.time()
-                if self.on_complete: self.on_complete(self)
+                # Verify file on disk and set real size
+                if self.filepath and os.path.exists(self.filepath):
+                    self.size = os.path.getsize(self.filepath)
+                    self.downloaded = self.size
+                    self.filename = os.path.basename(self.filepath)
+                elif os.path.exists(save_folder):
+                    cands = [os.path.join(save_folder, f) for f in os.listdir(save_folder) if not f.endswith(".part")]
+                    if cands:
+                        newest = max(cands, key=os.path.getmtime)
+                        if os.path.getmtime(newest) >= self.added_at - 10:
+                            self.filepath = newest
+                            self.filename = os.path.basename(newest)
+                            self.size = os.path.getsize(newest)
+                            self.downloaded = self.size
+                if not self.filename:
+                    self.filename = "video.mp4"
+                update_stats(self.size or self.downloaded, self.category)
+                if self.on_complete:
+                    self.on_complete(self)
             else:
                 self.status = "error"
                 self.error_msg = "yt-dlp exited with error"
         except Exception as e:
-            self.status = "error"; self.error_msg = str(e)
+            self.status = "error"
+            self.error_msg = str(e)
 
     def _parse_speed(self, s):
         try:
@@ -1040,6 +1174,8 @@ class IDMDownloadStatusDialog:
         self.nb = ttk.Notebook(self.win)
         self.nb.pack(fill="both", expand=True, padx=8, pady=(8, 4))
 
+        self.close_on_complete = tk.BooleanVar(value=True)
+
         self.tab_status = tk.Frame(self.nb, bg="#f5f5f5")
         self.tab_limiter = tk.Frame(self.nb, bg="#f5f5f5")
         self.tab_options = tk.Frame(self.nb, bg="#f5f5f5")
@@ -1054,6 +1190,31 @@ class IDMDownloadStatusDialog:
 
         self.win.protocol("WM_DELETE_WINDOW", self.win.destroy)
         self._tick()
+
+    def _open_file(self):
+        fpath = getattr(self.task, "filepath", "")
+        if fpath and os.path.exists(fpath):
+            try: os.startfile(fpath)
+            except Exception: pass
+
+    def _open_folder(self):
+        fpath = getattr(self.task, "filepath", "")
+        if fpath and os.path.exists(fpath):
+            try:
+                subprocess.run(["explorer", "/select,", os.path.normpath(fpath)], creationflags=0x08000000)
+            except Exception:
+                try: os.startfile(os.path.dirname(fpath))
+                except Exception: pass
+        elif getattr(self.task, "save_dir", "") and os.path.exists(self.task.save_dir):
+            try: os.startfile(self.task.save_dir)
+            except Exception: pass
+
+    def _auto_close(self):
+        try:
+            if self.win.winfo_exists() and self.task.status == "completed" and self.close_on_complete.get():
+                self.win.destroy()
+        except Exception:
+            pass
 
     def _build_status_tab(self, t):
         import tkinter as tk
@@ -1085,24 +1246,31 @@ class IDMDownloadStatusDialog:
         self.val_resume = make_row(grid_fr, 5, "Resume capability", "Yes", fg="#008800")
 
         self.pbar_canvas = tk.Canvas(content_box, height=22, bg="#e0e0e0", bd=1, relief="sunken", highlightthickness=0)
-        self.pbar_canvas.pack(fill="x", padx=10, pady=(6, 8))
+        self.pbar_canvas.pack(fill="x", padx=10, pady=(6, 4))
+
+        chk_fr = tk.Frame(content_box, bg="#ffffff")
+        chk_fr.pack(fill="x", padx=10, pady=(0, 6))
+        self.chk_close = tk.Checkbutton(chk_fr, text="Close dialog when download completes",
+                                        variable=self.close_on_complete, bg="#ffffff",
+                                        font=("Segoe UI", 8), fg="#555555", selectcolor="#ffffff")
+        self.chk_close.pack(anchor="w")
 
         self.details_fr = tk.Frame(content_box, bg="#ffffff")
         self.chunk_canvas = tk.Canvas(self.details_fr, height=36, bg="#f5f5f5", bd=1, relief="sunken", highlightthickness=0)
         self.chunk_canvas.pack(fill="x", padx=4, pady=4)
 
-        btn_fr = tk.Frame(self.tab_status, bg="#f5f5f5")
-        btn_fr.pack(fill="x", padx=8, pady=(0, 6))
+        self.btn_fr = tk.Frame(self.tab_status, bg="#f5f5f5")
+        self.btn_fr.pack(fill="x", padx=8, pady=(0, 6))
 
-        self.btn_details = tk.Button(btn_fr, text="Show details >>", command=self._toggle_details,
+        self.btn_details = tk.Button(self.btn_fr, text="Show details >>", command=self._toggle_details,
                                      font=("Segoe UI", 9), relief="groove", padx=10, pady=2, cursor="hand2")
         self.btn_details.pack(side="left")
 
-        self.btn_cancel = tk.Button(btn_fr, text="Cancel", command=self._cancel,
+        self.btn_cancel = tk.Button(self.btn_fr, text="Cancel", command=self._cancel,
                                     font=("Segoe UI", 9), relief="groove", padx=14, pady=2, cursor="hand2")
         self.btn_cancel.pack(side="right", padx=4)
 
-        self.btn_pause = tk.Button(btn_fr, text="Pause", command=self._pause_toggle,
+        self.btn_pause = tk.Button(self.btn_fr, text="Pause", command=self._pause_toggle,
                                    font=("Segoe UI", 9), relief="groove", padx=14, pady=2, cursor="hand2")
         self.btn_pause.pack(side="right")
 
@@ -1247,7 +1415,17 @@ class IDMDownloadStatusDialog:
         elif task.status in ("paused", "stopped"):
             self.btn_pause.configure(text="Resume", state="normal")
         elif task.status == "completed":
-            self.btn_pause.configure(state="disabled")
+            self.btn_pause.configure(text="Open", command=self._open_file, state="normal")
+            self.btn_cancel.configure(text="Close", command=self.win.destroy)
+            if not getattr(self, "_btn_folder_added", False):
+                self._btn_folder_added = True
+                import tkinter as tk
+                self.btn_folder = tk.Button(self.btn_fr, text="Open Folder", command=self._open_folder,
+                                            font=("Segoe UI", 9), relief="groove", padx=10, pady=2, cursor="hand2")
+                self.btn_folder.pack(side="right", padx=4)
+            if self.close_on_complete.get() and not getattr(self, "_auto_close_triggered", False):
+                self._auto_close_triggered = True
+                self.win.after(1500, self._auto_close)
 
         self.win.after(150, self._tick)
 
@@ -2605,12 +2783,25 @@ del "%~f0" >nul 2>&1
 
             threading.Thread(target=_worker, daemon=True).start()
 
-        tk.Button(btn_fr, text="⬇  Download & Install Update Now", command=do_download_and_install,
-                  bg=t2["green"], fg="#ffffff", font=FONT_BOLD, relief="flat", padx=16, pady=7, cursor="hand2").pack(side="left")
+        btn_update = tk.Button(btn_fr, text="⬇  Download & Install Update Now", command=do_download_and_install,
+                               bg=t2["green"], fg="#ffffff", font=FONT_BOLD, relief="flat", padx=16, pady=7, cursor="hand2")
+        btn_update.pack(side="left")
 
         if mandatory:
             tk.Button(btn_fr, text="✕  Exit CDM", command=_exit_app,
                       bg=t2["red"], fg="#ffffff", font=FONT_BOLD, relief="flat", padx=14, pady=7, cursor="hand2").pack(side="right")
+            countdown = [3]
+            def _auto_start():
+                if not win.winfo_exists(): return
+                if getattr(win, "_download_started", False): return
+                if countdown[0] > 0:
+                    btn_update.configure(text=f"⬇  Auto-Updating in {countdown[0]}s (or click now)")
+                    countdown[0] -= 1
+                    win.after(1000, _auto_start)
+                else:
+                    win._download_started = True
+                    do_download_and_install()
+            win.after(1000, _auto_start)
         else:
             tk.Button(btn_fr, text="Remind Me Later", command=win.destroy,
                       bg=t2["btn_bg"], fg=t2["btn_fg"], font=FONT_UI, relief="flat", padx=12, pady=7, cursor="hand2").pack(side="right")

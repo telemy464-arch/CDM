@@ -38,11 +38,22 @@ rt.contextMenus.onClicked.addListener((info, tab) => {
   if (url) sendToCDM(url, tab?.url);
 });
 
+const IGNORE_EXTS = ['.html', '.htm', '.php', '.asp', '.aspx', '.jsp', '.json', '.xml', '.js', '.css'];
+
 // Intercept browser downloads
 rt.downloads.onCreated.addListener((item) => {
   if (!extensionEnabled) return;
-  const url = item.url;
+  const url = item.url || "";
+  if (url.startsWith("blob:") || url.startsWith("data:")) return;
+
+  const isVideoSite = /youtube\.com|youtu\.be|facebook\.com|tiktok\.com|instagram\.com|twitter\.com|x\.com/i.test(url);
+  if (isVideoSite) return;
+
   const ext = getExt(url);
+  if (IGNORE_EXTS.includes(ext) || item.mime === "text/html" || item.mime === "application/xhtml+xml") {
+    return;
+  }
+
   if (DL_EXTS.includes(ext) || isLargeDownload(item)) {
     rt.downloads.cancel(item.id).then(() => {
       rt.downloads.erase({ id: item.id }).catch(() => {});
@@ -52,7 +63,10 @@ rt.downloads.onCreated.addListener((item) => {
 });
 
 function isLargeDownload(item) {
-  return item.fileSize > 1024 * 1024; // >1MB
+  if (item.mime === "text/html" || item.mime === "application/xhtml+xml") return false;
+  const ext = getExt(item.url || "");
+  if (IGNORE_EXTS.includes(ext)) return false;
+  return item.fileSize > 2 * 1024 * 1024; // >2MB
 }
 
 function getExt(url) {

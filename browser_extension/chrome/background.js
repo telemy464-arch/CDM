@@ -36,11 +36,23 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (url) sendToCDM(url, tab?.url);
 });
 
+const IGNORE_EXTS = ['.html', '.htm', '.php', '.asp', '.aspx', '.jsp', '.json', '.xml', '.js', '.css'];
+
 // Intercept browser downloads
 chrome.downloads.onCreated.addListener((item) => {
   if (!extensionEnabled) return;
-  const url = item.url;
+  const url = item.url || "";
+  if (url.startsWith("blob:") || url.startsWith("data:")) return;
+
+  // Do not intercept web pages or video platform watch pages
+  const isVideoSite = /youtube\.com|youtu\.be|facebook\.com|tiktok\.com|instagram\.com|twitter\.com|x\.com/i.test(url);
+  if (isVideoSite) return;
+
   const ext = getExt(url);
+  if (IGNORE_EXTS.includes(ext) || item.mime === "text/html" || item.mime === "application/xhtml+xml") {
+    return;
+  }
+
   if (DL_EXTS.includes(ext) || isLargeDownload(item)) {
     chrome.downloads.cancel(item.id, () => {
       chrome.downloads.erase({ id: item.id });
@@ -50,7 +62,10 @@ chrome.downloads.onCreated.addListener((item) => {
 });
 
 function isLargeDownload(item) {
-  return item.fileSize > 1024 * 1024; // >1MB
+  if (item.mime === "text/html" || item.mime === "application/xhtml+xml") return false;
+  const ext = getExt(item.url || "");
+  if (IGNORE_EXTS.includes(ext)) return false;
+  return item.fileSize > 2 * 1024 * 1024; // >2MB
 }
 
 function getExt(url) {
@@ -70,10 +85,6 @@ function sendToCDM(url, referer) {
     console.log("Sent to CDM successfully:", url);
   }).catch((err) => {
     console.warn("Could not reach CDM server:", err);
-    const isVideoSite = /youtube\.com|youtu\.be|facebook\.com|tiktok\.com|instagram\.com|twitter\.com|x\.com/i.test(url);
-    if (!isVideoSite && getExt(url)) {
-      chrome.downloads.download({ url: url });
-    }
   });
 }
 

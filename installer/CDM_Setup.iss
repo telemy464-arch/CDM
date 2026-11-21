@@ -4,7 +4,7 @@
 ; ═══════════════════════════════════════════════════════════════════════
 
 #define AppName      "CDM - Cloud Download Manager"
-#define AppVersion   "2.3.0"
+#define AppVersion   "2.3.1"
 #define AppPublisher "CDM Technology"
 #define AppURL       "https://github.com/telemy464-arch/CDM"
 #define AppExeName   "CDM.exe"

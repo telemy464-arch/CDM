@@ -1,21 +1,23 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "release_date": "2026-11-22",
   "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.0.exe",
   "changelog": [
+    "🎬 Fixed YouTube, Facebook, TikTok & stream video downloading: real video files (MP4/MKV) downloaded directly, no HTML links",
+    "⚡ Removed command console popup window during video downloads (completely silent & clean background process)",
+    "📊 Accurate video progress & file size tracking in download status dialog (never shows 0 B)",
+    "⏹ Automatic dialog close option upon download completion (no stacking windows)",
+    "📂 Integrated Open & Open Folder directly from completion dialog",
     "📱 Direct WhatsApp product key registration integration (01810936126)",
     "📊 Re-engineered Modern Analytics Dashboard with KPI cards & category progress",
     "🖥️ Sleek, compact & centered window sizing (860x500 responsive)",
     "✨ Full IDM-style user interface & layout redesign",
-    "📊 Dedicated IDM Download Status popup dialog with live progress, speed limiter & options",
-    "📁 Hierarchical Categories tree (All Downloads, Music, Video, Documents, etc.)",
     "⏱ Accurate real-time 3-day free trial countdown",
-    "🚀 Enhanced multi-segmented downloading engine",
-    "⚡ Seamless zero-click silent auto-update and restart"
+    "🚀 Seamless zero-click automatic force update"
   ],
   "mandatory": true,
-  "sha256": "63c48675825bc8c4dd03a1e907ec9fe1e28006c5f2d8f69405a060e0e73ed10f",
-  "size_bytes": 15831889,
+  "sha256": "9da77a1592d938d017ff224b41aa613d4570859e4948b9d7c689dd5e7d267888",
+  "size_bytes": 15837970,
   "min_os": "Windows 10 / 11"
 }
