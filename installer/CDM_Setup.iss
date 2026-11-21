@@ -114,6 +114,16 @@ Type: filesandordirs; Name: "{app}\*.dat"
 Type: filesandordirs; Name: "{app}\*.log"
 
 [Code]
+function InitializeSetup(): Boolean;
+var
+  iResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM CDM.exe /T', '', SW_HIDE, ewWaitUntilTerminated, iResultCode);
+  Exec('taskkill.exe', '/F /IM CDM.exe /T', '', SW_HIDE, ewWaitUntilTerminated, iResultCode);
+  Sleep(500);
+  Result := True;
+end;
+
 procedure InitializeWizard();
 begin
   WizardForm.WelcomeLabel2.Caption :=

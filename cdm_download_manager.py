@@ -368,6 +368,8 @@ class LicenseManager:
 
     def __init__(self):
         self.data = self._load()
+        if not self.data.get("activated") and not self.data.get("trial_started"):
+            self.start_trial()
 
     def _load(self):
         # 1. Check Windows Registry
@@ -438,9 +440,22 @@ class LicenseManager:
             return False
         try:
             start = datetime.fromisoformat(self.data.get("trial_start", ""))
-            return (datetime.now() - start).days < TRIAL_DAYS
+            return (datetime.now() - start).total_seconds() < TRIAL_DAYS * 86400
         except Exception:
             return False
+
+    @property
+    def hours_left(self):
+        if self.is_activated:
+            return 9999
+        if not self.data.get("trial_started"):
+            return TRIAL_DAYS * 24
+        try:
+            start = datetime.fromisoformat(self.data.get("trial_start", ""))
+            rem_sec = max(0, TRIAL_DAYS * 86400 - (datetime.now() - start).total_seconds())
+            return max(0, math.ceil(rem_sec / 3600))
+        except Exception:
+            return 0
 
     @property
     def days_left(self):
@@ -450,8 +465,8 @@ class LicenseManager:
             return TRIAL_DAYS
         try:
             start = datetime.fromisoformat(self.data.get("trial_start", ""))
-            elapsed = (datetime.now() - start).days
-            return max(0, TRIAL_DAYS - elapsed)
+            rem_sec = max(0, TRIAL_DAYS * 86400 - (datetime.now() - start).total_seconds())
+            return max(0, math.ceil(rem_sec / 86400))
         except Exception:
             return 0
 
@@ -2286,8 +2301,12 @@ del "%~f0" >nul 2>&1
         if trial.is_activated:
             trial_var.set("✅ Full Version")
             trial_lbl.configure(fg=T()["green"])
-        elif trial.days_left > 0:
-            trial_var.set(_("trial_left").format(d=trial.days_left))
+        elif trial.is_trial_active:
+            hrs = trial.hours_left
+            if hrs <= 24:
+                trial_var.set(f"⏱ Trial: {hrs}h left")
+            else:
+                trial_var.set(_("trial_left").format(d=trial.days_left))
             trial_lbl.configure(fg=T()["yellow"])
         else:
             trial_var.set(_("trial_expired"))
