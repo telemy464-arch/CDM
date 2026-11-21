@@ -1425,10 +1425,21 @@ def launch_gui():
     sb_title = tk.Label(sidebar, text="Categories", font=FONT_BOLD, anchor="w")
     sb_title.pack(fill="x", padx=8, pady=(10,4))
 
-    cat_lb = tk.Listbox(sidebar, selectmode="single", activestyle="none",
-                         bd=0, highlightthickness=0, relief="flat",
-                         font=("Segoe UI",10), width=20)
-    cat_lb.pack(fill="both", expand=True, padx=4, pady=4)
+    cat_tree = ttk.Treeview(sidebar, show="tree", selectmode="browse")
+    cat_tree.pack(fill="both", expand=True, padx=2, pady=2)
+
+    cat_all = cat_tree.insert("", "end", iid="all", text="📁 All Downloads", open=True)
+    cat_tree.insert(cat_all, "end", iid="cat_Compressed", text="🗜 Compressed")
+    cat_tree.insert(cat_all, "end", iid="cat_Documents",  text="📄 Documents")
+    cat_tree.insert(cat_all, "end", iid="cat_Music",      text="🎵 Music")
+    cat_tree.insert(cat_all, "end", iid="cat_Programs",   text="💻 Programs")
+    cat_tree.insert(cat_all, "end", iid="cat_Video",      text="🎬 Video")
+    cat_tree.insert("", "end", iid="unfinished", text="📥 Unfinished")
+    cat_tree.insert("", "end", iid="finished",   text="✅ Finished")
+    cat_tree.insert("", "end", iid="grabber",    text="🌐 Grabber projects")
+    cat_tree.insert("", "end", iid="queues",     text="📋 Queues")
+    cat_tree.selection_set("all")
+    cat_tree.bind("<<TreeviewSelect>>", lambda _: refresh_tree())
 
     sb_sep = tk.Frame(body, width=1)
     sb_sep.pack(side="left", fill="y")
@@ -2619,8 +2630,7 @@ del "%~f0" >nul 2>&1
         hdr_spd.configure(bg=t2["toolbar"],fg=t2["green"])
         trial_lbl.configure(bg=t2["toolbar"])
         sb_title.configure(bg=t2["cat_bg"],fg=t2["fg"])
-        cat_lb.configure(bg=t2["cat_bg"],fg=t2["fg"],
-                          selectbackground=t2["cat_sel"],selectforeground=t2["tree_sel_fg"])
+        # cat_tree styled via ttk theme
         det_chunk.configure(bg=t2["bg"],highlightthickness=0)
         for w2 in [det_file,det_url,det_info,det_st_title,det_st_spd,det_st_eta,det_st_seg,det_st_time,det_st_cat]:
             try: w2.configure(bg=t2["bg"],fg=t2["fg"])
