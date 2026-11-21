@@ -4,7 +4,7 @@
 ; ═══════════════════════════════════════════════════════════════════════
 
 #define AppName      "CDM - Cloud Download Manager"
-#define AppVersion   "2.0.0"
+#define AppVersion   "2.1.0"
 #define AppPublisher "CDM Technology"
 #define AppURL       "https://github.com/telemy464-arch/CDM"
 #define AppExeName   "CDM.exe"
@@ -117,7 +117,7 @@ Type: filesandordirs; Name: "{app}\*.log"
 procedure InitializeWizard();
 begin
   WizardForm.WelcomeLabel2.Caption :=
-    'Welcome to CDM - Cloud Download Manager v2.0!'#13#10 +
+    'Welcome to CDM - Cloud Download Manager v2.1!'#13#10 +
     '"Smart Cloud Downloader with Multi-Connection Speed"'#13#10#13#10 +
     '✅ Multi-connection Super Fast Download'#13#10 +
     '✅ Pause, Resume, Stop anytime'#13#10 +

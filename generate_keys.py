@@ -24,8 +24,7 @@ def generate_key():
 
 def verify_key(key):
     key = key.strip().upper().replace(" ", "")
-    if key in ("CDM-FREE-2026", "CDM-PRO-2026", "CDM-LIFETIME-PREMIUM", "CDM-MASTER-KEY",
-               "VNA-FREE-2026", "VNA-PRO-2026", "VNA-LIFETIME-PREMIUM"):
+    if key in ("CDM-FREE-2026", "CDM-PRO-2026", "CDM-LIFETIME-PREMIUM", "CDM-MASTER-KEY"):
         return True
     parts = key.split("-")
     if len(parts) != 5:

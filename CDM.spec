@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['vna_download_manager.py'],
+    ['cdm_download_manager.py'],
     pathex=[],
     binaries=[],
     datas=[('browser_extension', 'browser_extension'), ('assets', 'assets'), ('sounds', 'sounds')],

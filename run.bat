@@ -1,6 +1,6 @@
 @echo off
-start "" pythonw vna_download_manager.pyw
+start "" pythonw cdm_download_manager.pyw
 if errorlevel 1 (
-  start "" python vna_download_manager.py
+  start "" python cdm_download_manager.py
 )
 exit

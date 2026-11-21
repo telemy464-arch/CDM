@@ -50,7 +50,7 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME    = "CDM - Cloud Download Manager"
-VERSION     = "2.0.0"
+VERSION     = "2.1.0"
 BUILD_DATE  = "2026-11-21"
 TRIAL_DAYS  = 3
 EXT_PORT    = 19876   # local HTTP server for browser extension

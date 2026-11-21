@@ -62,7 +62,7 @@ git clone https://github.com/telemy464-arch/CDM.git
 cd CDM
 
 # 2. Run without terminal window
-pythonw vna_download_manager.py
+pythonw cdm_download_manager.py
 # or double-click run.bat
 ```
 
