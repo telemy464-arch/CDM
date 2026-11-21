@@ -1283,7 +1283,7 @@ def launch_gui():
     root.geometry("1100x680")
     root.minsize(900, 540)
     root.configure(bg=T()["bg"])
-    root.withdraw()  # Initially hidden until update check passes
+    root.deiconify()
 
     try:
         root.iconbitmap(str(BASE_DIR / "assets" / "icon.ico"))
@@ -2665,16 +2665,14 @@ del "%~f0" >nul 2>&1
         clip_mon.start()
 
     # ══════════════════════════════════════════════════════════════════════════
-    # STARTUP CHECK (MANDATORY UPDATE FIRST, THEN ACTIVATION & ACCESS)
+    # STARTUP CHECK
     # ══════════════════════════════════════════════════════════════════════════
-    def on_startup_allow_access():
-        root.deiconify()
-        root.lift()
-        if not trial.is_valid:
-            root.after(150, lambda: activate_dialog(mandatory=True))
-
-    # Always check for mandatory updates on launch immediately
-    root.after(50, lambda: check_updates(manual=False, on_startup=True, on_success_no_update=on_startup_allow_access))
+    root.deiconify()
+    root.lift()
+    if not trial.is_valid:
+        root.after(200, lambda: activate_dialog(mandatory=True))
+    if settings.get("auto_update_check", True):
+        root.after(3000, lambda: check_updates(manual=False))
 
     # ══════════════════════════════════════════════════════════════════════════
     # MAIN REFRESH LOOP
