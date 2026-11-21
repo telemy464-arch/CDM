@@ -15,7 +15,7 @@
     "⚡ Seamless zero-click silent auto-update and restart"
   ],
   "mandatory": true,
-  "sha256": "00f9ec7536bef34c0b22cd5a7ea411454a9b9b72d684404de4529cf1942b353d",
-  "size_bytes": 15830500,
+  "sha256": "63c48675825bc8c4dd03a1e907ec9fe1e28006c5f2d8f69405a060e0e73ed10f",
+  "size_bytes": 15831889,
   "min_os": "Windows 10 / 11"
 }

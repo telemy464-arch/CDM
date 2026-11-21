@@ -66,9 +66,14 @@ function sendToCDM(url, referer) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, referer: referer || "" })
-  }).catch(() => {
-    // If CDM app is not currently open, resume browser download
-    chrome.downloads.download({ url: url });
+  }).then(r => r.json()).then(data => {
+    console.log("Sent to CDM successfully:", url);
+  }).catch((err) => {
+    console.warn("Could not reach CDM server:", err);
+    const isVideoSite = /youtube\.com|youtu\.be|facebook\.com|tiktok\.com|instagram\.com|twitter\.com|x\.com/i.test(url);
+    if (!isVideoSite && getExt(url)) {
+      chrome.downloads.download({ url: url });
+    }
   });
 }
 

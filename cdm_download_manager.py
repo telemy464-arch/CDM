@@ -2740,6 +2740,18 @@ del "%~f0" >nul 2>&1
     update_trial_label()
 
     # ══════════════════════════════════════════════════════════════════════════
+    # BROWSER EXTENSION SERVER (PORT 19876)
+    # ══════════════════════════════════════════════════════════════════════════
+    ext_server = ExtensionServer(EXT_PORT)
+    def on_ext_url(url, referer):
+        if is_video_stream_url(url):
+            root.after(0, lambda: playlist_dialog(prefill_url=url))
+        else:
+            root.after(0, lambda: add_dialog(prefill_url=url))
+    ext_server.on_url = on_ext_url
+    ext_server.start()
+
+    # ══════════════════════════════════════════════════════════════════════════
     # CLIPBOARD MONITOR
     # ══════════════════════════════════════════════════════════════════════════
     def on_clip(url):
