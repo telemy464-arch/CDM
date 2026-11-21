@@ -1,9 +1,12 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "release_date": "2026-11-22",
   "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.0.exe",
   "changelog": [
+    "📱 Direct WhatsApp product key registration integration (01810936126)",
+    "📊 Re-engineered Modern Analytics Dashboard with KPI cards & category progress",
+    "🖥️ Sleek, compact & centered window sizing (860x500 responsive)",
     "✨ Full IDM-style user interface & layout redesign",
     "📊 Dedicated IDM Download Status popup dialog with live progress, speed limiter & options",
     "📁 Hierarchical Categories tree (All Downloads, Music, Video, Documents, etc.)",
@@ -12,7 +15,7 @@
     "⚡ Seamless zero-click silent auto-update and restart"
   ],
   "mandatory": true,
-  "sha256": "377998963cd0f95c3949e8075c240d0544948a59e09ee9ea33288b92242cc696",
-  "size_bytes": 15827277,
+  "sha256": "00f9ec7536bef34c0b22cd5a7ea411454a9b9b72d684404de4529cf1942b353d",
+  "size_bytes": 15830500,
   "min_os": "Windows 10 / 11"
 }

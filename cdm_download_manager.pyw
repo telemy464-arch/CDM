@@ -49,11 +49,13 @@ except ImportError:
     HAS_REQUESTS = False
 
 # ── App constants ─────────────────────────────────────────────────────────────
-APP_NAME    = "CDM - Cloud Download Manager"
-VERSION     = "2.2.0"
-BUILD_DATE  = "2026-11-22"
-TRIAL_DAYS  = 3
-EXT_PORT    = 19876   # local HTTP server for browser extension
+APP_NAME        = "CDM - Cloud Download Manager"
+VERSION         = "2.3.0"
+BUILD_DATE      = "2026-11-22"
+TRIAL_DAYS      = 3
+EXT_PORT        = 19876   # local HTTP server for browser extension
+WHATSAPP_NUMBER = "8801810936126"
+WHATSAPP_LINK   = f"https://wa.me/{WHATSAPP_NUMBER}?text=Hello%2C%20I%20want%20to%20get%20a%20Product%20Key%20for%20CDM"
 
 BASE_DIR      = Path(os.path.dirname(os.path.abspath(__file__)))
 APPDATA_CDM   = Path(os.environ.get("APPDATA", str(Path.home()))) / "CDM"
@@ -1280,8 +1282,14 @@ def launch_gui():
     # ── root window ───────────────────────────────────────────────────────────
     root = tk.Tk()
     root.title(f"{APP_NAME} v{VERSION}")
-    root.geometry("1100x680")
-    root.minsize(900, 540)
+    # Compact, sleek IDM-style window sizing (centered)
+    w_default, h_default = 860, 500
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+    cx = max(20, (sw - w_default) // 2)
+    cy = max(20, (sh - h_default) // 2)
+    root.geometry(f"{w_default}x{h_default}+{cx}+{cy}")
+    root.minsize(680, 380)
     root.configure(bg=T()["bg"])
     root.deiconify()
 
@@ -1432,7 +1440,16 @@ def launch_gui():
     help_m.add_separator()
     help_m.add_command(label=f"About {APP_NAME}",         command=lambda: about_dialog())
 
-    reg_m.add_command(label="Registration...",            command=lambda: activate_dialog())
+    def open_whatsapp_registration():
+        import webbrowser
+        msg = urllib.parse.quote("Hello, I want to purchase / get a Product Key for CDM.")
+        wa_url = f"https://wa.me/{WHATSAPP_NUMBER}?text={msg}"
+        try:
+            webbrowser.open(wa_url)
+        except Exception:
+            pass
+
+    reg_m.add_command(label="Registration...",            command=open_whatsapp_registration)
     reg_m.add_command(label="Product Key Activation",     command=lambda: activate_dialog())
 
     root.bind("<Control-n>", lambda _: add_dialog())
@@ -2131,6 +2148,14 @@ def launch_gui():
         stat_lbl = tk.Label(content, text="", bg=t2["bg"], font=FONT_UI)
         stat_lbl.pack(fill="x", pady=4)
 
+        # WhatsApp Registration / Key Request Button
+        wa_fr = tk.Frame(content, bg=t2["bg"])
+        wa_fr.pack(fill="x", pady=(2, 6))
+        tk.Button(wa_fr, text="💬  Buy / Get Product Key via WhatsApp (01810936126)",
+                  command=open_whatsapp_registration,
+                  bg="#25d366", fg="#ffffff", font=FONT_BOLD,
+                  relief="flat", padx=12, pady=6, cursor="hand2").pack(fill="x")
+
         def on_key_type(*args):
             v = key_var.get().upper().replace(" ", "")
             if v.startswith("CDM-") and len(v) < 25:
@@ -2199,34 +2224,98 @@ def launch_gui():
         msg += "Firefox: about:debugging → Load Temporary Add-on → select manifest.json"
         messagebox.showinfo("Browser Extension",msg,parent=root)
 
-    # ── Dashboard ─────────────────────────────────────────────────────────────
+    # ── Dashboard (Modern Analytics & Statistics) ──────────────────────────────
     def dashboard_dialog():
-        win,t2=_dlg("📊 Analytics Dashboard",500,420)
-        st=load_json(STATS_FILE,{"total_bytes":0,"total_files":0,"by_category":{}})
-        tk.Label(win,text="📊 Download Analytics",bg=t2["bg"],fg=t2["accent"],
-                 font=FONT_TITLE).pack(pady=10)
-        rows=[
-            ("Total Downloaded",human_size(st.get("total_bytes",0))),
-            ("Total Files",str(st.get("total_files",0))),
-            ("Active Downloads",str(sum(1 for t3 in tasks if t3.status=="downloading"))),
-            ("Completed",str(sum(1 for t3 in tasks if t3.status=="completed"))),
-            ("In Queue",str(sum(1 for t3 in tasks if t3.status=="queued"))),
-        ]
-        fr=tk.Frame(win,bg=t2["panel"]); fr.pack(fill="x",padx=20,pady=4)
-        for k,v in rows:
-            row=tk.Frame(fr,bg=t2["panel"]); row.pack(fill="x",padx=10,pady=3)
-            tk.Label(row,text=k+":",bg=t2["panel"],fg=t2["muted"],font=FONT_UI,anchor="w",width=22).pack(side="left")
-            tk.Label(row,text=v,bg=t2["panel"],fg=t2["accent"],font=FONT_BOLD,anchor="w").pack(side="left")
+        win, t2 = _dlg("📊 CDM Download Analytics & Statistics", 580, 500)
+        win.resizable(False, False)
+        st = load_json(STATS_FILE, {"total_bytes": 0, "total_files": 0, "by_category": {}})
 
-        # by category
-        tk.Label(win,text="By Category:",bg=t2["bg"],fg=t2["fg"],font=FONT_BOLD).pack(anchor="w",padx=20,pady=(10,2))
-        bc=st.get("by_category",{})
-        frb=tk.Frame(win,bg=t2["panel"]); frb.pack(fill="x",padx=20)
-        for cat,cnt in sorted(bc.items(),key=lambda x:-x[1]):
-            row=tk.Frame(frb,bg=t2["panel"]); row.pack(fill="x",padx=10,pady=2)
-            icon=CAT_ICONS.get(cat,"📁")
-            tk.Label(row,text=f"{icon} {cat}:",bg=t2["panel"],fg=t2["muted"],font=FONT_UI,anchor="w",width=16).pack(side="left")
-            tk.Label(row,text=f"{cnt} files",bg=t2["panel"],fg=t2["fg"],font=FONT_UI,anchor="w").pack(side="left")
+        # Header banner
+        hdr = tk.Frame(win, bg=t2["panel"], height=48)
+        hdr.pack(fill="x")
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text="📊  Download Analytics Dashboard", bg=t2["panel"], fg=t2["fg"],
+                 font=("Segoe UI", 12, "bold"), anchor="w").pack(side="left", padx=16, pady=10)
+
+        content = tk.Frame(win, bg=t2["bg"])
+        content.pack(fill="both", expand=True, padx=16, pady=10)
+
+        # 3 Top KPI Cards
+        cards_fr = tk.Frame(content, bg=t2["bg"])
+        cards_fr.pack(fill="x", pady=(0, 10))
+
+        tot_bytes = st.get("total_bytes", 0)
+        tot_files = st.get("total_files", 0)
+        active_cnt = sum(1 for t3 in tasks if t3.status == "downloading")
+        done_cnt = sum(1 for t3 in tasks if t3.status == "completed")
+
+        kpis = [
+            ("💾 Total Data", human_size(tot_bytes), "#0078d7"),
+            ("📁 Completed", f"{tot_files} files", "#28a745"),
+            ("⚡ Active Now", f"{active_cnt} transfer(s)", "#e65100"),
+        ]
+        for title, val, color in kpis:
+            card = tk.Frame(cards_fr, bg="#ffffff", bd=1, relief="solid")
+            card.pack(side="left", fill="both", expand=True, padx=4)
+            tk.Label(card, text=title, bg="#ffffff", fg="#666666", font=("Segoe UI", 8)).pack(pady=(8, 2))
+            tk.Label(card, text=val, bg="#ffffff", fg=color, font=("Segoe UI", 12, "bold")).pack(pady=(0, 8))
+
+        # Live session status row
+        sess_fr = tk.Frame(content, bg="#ffffff", bd=1, relief="solid")
+        sess_fr.pack(fill="x", pady=(0, 10), ipady=4)
+        tk.Label(sess_fr, text="Current Session Overview", bg="#ffffff", fg="#222222", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=12, pady=(4, 4))
+
+        s_grid = tk.Frame(sess_fr, bg="#ffffff")
+        s_grid.pack(fill="x", padx=12)
+        s_items = [
+            ("Active Tasks:", str(active_cnt), "#0078d7"),
+            ("Completed:", str(done_cnt), "#28a745"),
+            ("In Queue:", str(sum(1 for t3 in tasks if t3.status == "queued")), "#f57c00"),
+            ("Total in List:", str(len(tasks)), "#444444"),
+        ]
+        for idx, (lbl, v_text, col) in enumerate(s_items):
+            tk.Label(s_grid, text=lbl, bg="#ffffff", fg="#666666", font=("Segoe UI", 8), width=14, anchor="w").grid(row=idx//2, column=(idx%2)*2, sticky="w", pady=1)
+            tk.Label(s_grid, text=v_text, bg="#ffffff", fg=col, font=("Segoe UI", 8, "bold"), width=12, anchor="w").grid(row=idx//2, column=(idx%2)*2+1, sticky="w", pady=1)
+
+        # Category Breakdown
+        cat_box = tk.Frame(content, bg="#ffffff", bd=1, relief="solid")
+        cat_box.pack(fill="both", expand=True, pady=(0, 10), padx=0)
+        tk.Label(cat_box, text="Downloads by Category", bg="#ffffff", fg="#222222", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=12, pady=(6, 4))
+
+        bc = st.get("by_category", {})
+        total_cat_files = max(1, sum(bc.values()))
+        cats_to_show = ["Video", "Compressed", "Documents", "Music", "Programs", "Others"]
+
+        canvas_fr = tk.Frame(cat_box, bg="#ffffff")
+        canvas_fr.pack(fill="both", expand=True, padx=12, pady=(0, 6))
+
+        for cat in cats_to_show:
+            cnt = bc.get(cat, 0)
+            pct = (cnt / total_cat_files) * 100 if total_cat_files > 0 else 0
+            icon = CAT_ICONS.get(cat, "📁")
+            r_fr = tk.Frame(canvas_fr, bg="#ffffff")
+            r_fr.pack(fill="x", pady=2)
+            tk.Label(r_fr, text=f"{icon} {cat}", bg="#ffffff", fg="#333333", font=("Segoe UI", 8), width=15, anchor="w").pack(side="left")
+
+            pbar = ttk.Progressbar(r_fr, length=180, value=pct, maximum=100)
+            pbar.pack(side="left", padx=8)
+
+            tk.Label(r_fr, text=f"{cnt} files ({pct:.0f}%)", bg="#ffffff", fg="#666666", font=("Segoe UI", 8), width=14, anchor="w").pack(side="left")
+
+        # Bottom buttons
+        btn_fr = tk.Frame(win, bg=t2["bg"])
+        btn_fr.pack(fill="x", padx=16, pady=(0, 10))
+
+        def do_reset_stats():
+            if messagebox.askyesno("Reset Statistics", "Are you sure you want to reset all download statistics?", parent=win):
+                save_json(STATS_FILE, {"total_bytes": 0, "total_files": 0, "by_category": {}})
+                win.destroy()
+                dashboard_dialog()
+
+        tk.Button(btn_fr, text="🧹 Reset Statistics", command=do_reset_stats,
+                  bg=t2["btn_bg"], fg=t2["btn_fg"], font=FONT_UI, relief="groove", padx=10, pady=3, cursor="hand2").pack(side="left")
+        tk.Button(btn_fr, text="Close", command=win.destroy,
+                  bg=t2["accent"], fg="#ffffff", font=FONT_BOLD, relief="flat", padx=16, pady=3, cursor="hand2").pack(side="right")
 
     # ── About ─────────────────────────────────────────────────────────────────
     def about_dialog():
