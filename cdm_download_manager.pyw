@@ -56,10 +56,24 @@ TRIAL_DAYS  = 3
 EXT_PORT    = 19876   # local HTTP server for browser extension
 
 BASE_DIR      = Path(os.path.dirname(os.path.abspath(__file__)))
-SETTINGS_FILE = BASE_DIR / "settings.json"
-STATS_FILE    = BASE_DIR / "stats.json"
-TRIAL_FILE    = BASE_DIR / ".trial"
-QUEUE_FILE    = BASE_DIR / "queue.json"
+APPDATA_CDM   = Path(os.environ.get("APPDATA", str(Path.home()))) / "CDM"
+APPDATA_CDM.mkdir(parents=True, exist_ok=True)
+SETTINGS_FILE = APPDATA_CDM / "settings.json"
+STATS_FILE    = APPDATA_CDM / "stats.json"
+TRIAL_FILE    = APPDATA_CDM / ".trial"
+QUEUE_FILE    = APPDATA_CDM / "queue.json"
+LICENSE_FILE  = APPDATA_CDM / "license.json"
+
+# Auto-migrate any existing state files from BASE_DIR to APPDATA_CDM
+for _fn in ("settings.json", "stats.json", ".trial", "queue.json", "license.json"):
+    _src = BASE_DIR / _fn
+    _dst = APPDATA_CDM / _fn
+    if _src.exists() and not _dst.exists():
+        try:
+            import shutil
+            shutil.copy2(str(_src), str(_dst))
+        except Exception:
+            pass
 
 DEFAULT_SETTINGS = {
     "download_dir"      : str(Path.home() / "Downloads" / "CDM"),
@@ -137,9 +151,13 @@ CAT_ICONS = {
 }
 
 STATUS_COLORS = {
-    "queued":"#7ec8e3","downloading":"#00c851","paused":"#ffbb33",
-    "completed":"#00c851","error":"#ff4444","stopped":"#aaaaaa",
-    "merging":"#c0a0ff",
+    "queued":      "#455a64",
+    "downloading": "#0055aa",
+    "paused":      "#8a5300",
+    "completed":   "#000000",
+    "error":       "#c62828",
+    "stopped":     "#616161",
+    "merging":     "#4a148c",
 }
 
 # ── Translations ──────────────────────────────────────────────────────────────
@@ -196,34 +214,34 @@ THEMES = {
         "cat_bg":"#0d1b2a","cat_sel":"#1b3a5c",
     },
     "light": {
-        "bg"          : "#ffffff",
-        "bg2"         : "#f8f9fa",
-        "panel"       : "#eef1f6",
-        "toolbar"     : "#f3f4f6",
-        "fg"          : "#1e1e2f",
-        "muted"       : "#52526b",
-        "accent"      : "#5b21b6",
-        "accent2"     : "#65a30d",
-        "green"       : "#16a34a",
-        "yellow"      : "#d97706",
-        "red"         : "#dc2626",
-        "bar_bg"      : "#e2e8f0",
-        "bar_fill"    : "#5b21b6",
+        "bg"          : "#f0f0f0",
+        "bg2"         : "#e8e8e8",
+        "panel"       : "#f0f0f0",
+        "toolbar"     : "#f5f6f7",
+        "fg"          : "#000000",
+        "muted"       : "#444444",
+        "accent"      : "#0066cc",
+        "accent2"     : "#28a745",
+        "green"       : "#28a745",
+        "yellow"      : "#ff9900",
+        "red"         : "#cc0000",
+        "bar_bg"      : "#e0e0e0",
+        "bar_fill"    : "#28a745",
         "field"       : "#ffffff",
-        "border"      : "#cbd5e1",
+        "border"      : "#d0d0d0",
         "tree_bg"     : "#ffffff",
-        "tree_sel"    : "#5b21b6",
+        "tree_sel"    : "#3399ff",
         "tree_sel_fg" : "#ffffff",
-        "sep"         : "#e2e8f0",
-        "header_bg"   : "#5b21b6",
-        "header_fg"   : "#ffffff",
-        "btn_bg"      : "#5b21b6",
-        "btn_fg"      : "#ffffff",
-        "btn_hover"   : "#7c3aed",
+        "sep"         : "#d0d0d0",
+        "header_bg"   : "#ececec",
+        "header_fg"   : "#000000",
+        "btn_bg"      : "#f5f6f7",
+        "btn_fg"      : "#222222",
+        "btn_hover"   : "#e5f1fb",
         "sb_bg"       : "#ffffff",
-        "sb_trough"   : "#f1f5f9",
-        "cat_bg"      : "#f8fafc",
-        "cat_sel"     : "#5b21b6",
+        "sb_trough"   : "#f0f0f0",
+        "cat_bg"      : "#ffffff",
+        "cat_sel"     : "#cce8ff",
     },
     "glass": {
         "bg":"#0a0a1a","bg2":"#101025","panel":"#1a1a35","toolbar":"#050510",
@@ -1282,77 +1300,140 @@ def launch_gui():
     except Exception: pass
 
     # ══════════════════════════════════════════════════════════════════════════
-    # CUSTOM IDM-STYLE BUTTON
+    # CUSTOM IDM-STYLE BUTTON (AUTHENTIC IDM 6.35)
     # ══════════════════════════════════════════════════════════════════════════
     class IDMButton(tk.Canvas):
-        def __init__(self, parent, text, command=None, icon="", width=90, **kw):
+        BTN_CONFIGS = {
+            "Add URL":       {"bg": "#0078d7", "icon": "＋"},
+            "Resume":        {"bg": "#2e7d32", "icon": "▶"},
+            "Stop":          {"bg": "#d32f2f", "icon": "■"},
+            "Stop All":      {"bg": "#e65100", "icon": "✋"},
+            "Delete":        {"bg": "#616161", "icon": "✕"},
+            "Delete Co...":  {"bg": "#00838f", "icon": "🧹"},
+            "Options":       {"bg": "#1565c0", "icon": "⚙"},
+            "Scheduler":     {"bg": "#ef6c00", "icon": "⏰"},
+            "Start Qu...":   {"bg": "#388e3c", "icon": "▶"},
+            "Stop Qu...":    {"bg": "#c2185b", "icon": "⏸"},
+            "Grabber":       {"bg": "#0288d1", "icon": "🌐"},
+            "Tell a Friend": {"bg": "#7b1fa2", "icon": "👥"},
+            "Theme":         {"bg": "#546e7a", "icon": "🌙"},
+        }
+
+        def __init__(self, parent, text, command=None, icon="", width=66, height=52, **kw):
             t = T()
-            super().__init__(parent, width=width, height=34,
+            super().__init__(parent, width=width, height=height,
                              bg=t["toolbar"], bd=0, highlightthickness=0, **kw)
-            self._text=text; self._icon=icon; self._cmd=command; self._hov=False
+            self._text = text
+            self._icon = icon
+            self._cmd  = command
+            self._hov  = False
             self.bind("<Enter>",    self._enter)
             self.bind("<Leave>",    self._leave)
             self.bind("<Button-1>", self._click)
             self._draw()
 
         def _draw(self):
-            t=T(); self.delete("all")
-            bg = t["btn_hover"] if self._hov else t["btn_bg"]
-            w,h,r = int(self["width"]),34,6
-            self.create_polygon(r,0,w-r,0,w,r,w,h-r,w-r,h,r,h,0,h-r,0,r,
-                                fill=bg,smooth=True,outline=t["accent"],width=1)
-            self.create_text(w//2,h//2,
-                             text=(self._icon+" "+self._text).strip(),
-                             fill=t["btn_fg"],font=FONT_BOLD,anchor="center")
+            t = T()
+            self.delete("all")
+            w = int(self["width"])
+            h = int(self["height"])
 
-        def _enter(self,_): self._hov=True;  self._draw()
-        def _leave(self,_): self._hov=False; self._draw()
-        def _click(self,_):
-            if self._cmd: self._cmd()
+            if self._hov:
+                self.create_rectangle(1, 1, w - 1, h - 1, fill="#e5f1fb", outline="#70c0e7", width=1)
+            else:
+                self.create_rectangle(0, 0, w, h, fill=t["toolbar"], outline="")
+
+            # Center top circular icon badge (IDM 6.35 signature style)
+            cx = w // 2
+            cy = 17
+            cfg = self.BTN_CONFIGS.get(self._text, {"bg": "#0078d7", "icon": self._icon or "★"})
+            circle_color = cfg["bg"]
+            symbol = self._icon if self._icon else cfg["icon"]
+
+            r = 12
+            self.create_oval(cx - r, cy - r, cx + r, cy + r, fill=circle_color, outline="#ffffff", width=1)
+            self.create_text(cx, cy, text=symbol, fill="#ffffff", font=("Segoe UI Symbol", 8, "bold"))
+
+            # Label on bottom
+            fg_col = "#222222" if t.get("fg") == "#000000" else t["fg"]
+            self.create_text(cx, 38, text=self._text, fill=fg_col, font=("Segoe UI", 8), anchor="center")
+
+        def _enter(self, _):
+            self._hov = True
+            self.configure(cursor="hand2")
+            self._draw()
+
+        def _leave(self, _):
+            self._hov = False
+            self._draw()
+
+        def _click(self, _):
+            if self._cmd:
+                self._cmd()
+
         def reconfigure(self):
-            t=T(); self.configure(bg=t["toolbar"]); self._draw()
+            t = T()
+            self.configure(bg=t["toolbar"])
+            self._draw()
 
     all_btns = []
-    def mkbtn(par, text, cmd, icon="", width=92, w=None, **kw):
+    def mkbtn(par, text, cmd, icon="", width=66, height=52, w=None, **kw):
         if w is not None: width = w
-        b = IDMButton(par, text, cmd, icon=icon, width=width, **kw)
-        all_btns.append(b); return b
+        b = IDMButton(par, text, cmd, icon=icon, width=width, height=height, **kw)
+        all_btns.append(b)
+        return b
 
     # ══════════════════════════════════════════════════════════════════════════
     # LAYOUT
     # ══════════════════════════════════════════════════════════════════════════
 
-    # ── MENU BAR ──────────────────────────────────────────────────────────────
+    # ── MENU BAR (AUTHENTIC IDM 6.19 / 6.35) ──────────────────────────────────
     menubar = tk.Menu(root)
     root.config(menu=menubar)
-    dm  = tk.Menu(menubar,tearoff=0)
-    vm  = tk.Menu(menubar,tearoff=0)
-    tm  = tk.Menu(menubar,tearoff=0)
-    hm  = tk.Menu(menubar,tearoff=0)
-    menubar.add_cascade(label="Downloads",menu=dm)
-    menubar.add_cascade(label="View",     menu=vm)
-    menubar.add_cascade(label="Tools",    menu=tm)
-    menubar.add_cascade(label="Help",     menu=hm)
+    tasks_m = tk.Menu(menubar, tearoff=0)
+    file_m  = tk.Menu(menubar, tearoff=0)
+    dl_m    = tk.Menu(menubar, tearoff=0)
+    view_m  = tk.Menu(menubar, tearoff=0)
+    help_m  = tk.Menu(menubar, tearoff=0)
+    reg_m   = tk.Menu(menubar, tearoff=0)
 
-    dm.add_command(label="Add Download (Ctrl+N)",   command=lambda: add_dialog())
-    dm.add_command(label="Batch Download",           command=lambda: batch_dialog())
-    dm.add_command(label="Playlist / YouTube",       command=lambda: playlist_dialog())
-    dm.add_command(label="Site Grabber",             command=lambda: grabber_dialog())
-    dm.add_command(label="Torrent / Magnet",         command=lambda: torrent_dialog())
-    dm.add_separator()
-    dm.add_command(label="Settings",                 command=lambda: settings_dialog())
-    dm.add_separator()
-    dm.add_command(label="Exit",                     command=root.quit)
+    menubar.add_cascade(label="Tasks",        menu=tasks_m)
+    menubar.add_cascade(label="File",         menu=file_m)
+    menubar.add_cascade(label="Downloads",    menu=dl_m)
+    menubar.add_cascade(label="View",         menu=view_m)
+    menubar.add_cascade(label="Help",         menu=help_m)
+    menubar.add_cascade(label="Registration", menu=reg_m)
 
-    vm.add_command(label="Toggle Theme",             command=lambda: toggle_theme())
-    vm.add_command(label="Analytics Dashboard",      command=lambda: dashboard_dialog())
+    tasks_m.add_command(label="Add new download (Ctrl+N)", command=lambda: add_dialog())
+    tasks_m.add_command(label="Batch download",           command=lambda: batch_dialog())
+    tasks_m.add_command(label="Playlist / YouTube",       command=lambda: playlist_dialog())
+    tasks_m.add_command(label="Site Grabber",             command=lambda: grabber_dialog())
+    tasks_m.add_command(label="Torrent / Magnet",         command=lambda: torrent_dialog())
+    tasks_m.add_separator()
+    tasks_m.add_command(label="Exit",                     command=root.quit)
 
-    tm.add_command(label="Test Proxy",               command=lambda: test_proxy_dialog())
-    tm.add_command(label="Activate License",         command=lambda: activate_dialog())
-    tm.add_command(label="Repair Browser Extension", command=lambda: repair_ext_dialog())
-    tm.add_command(label="Check for Updates",        command=lambda: check_updates())
+    file_m.add_command(label="Stop download",             command=lambda: do_pause())
+    file_m.add_command(label="Pause download",            command=lambda: do_pause())
+    file_m.add_command(label="Resume download",           command=lambda: do_resume())
+    file_m.add_command(label="Stop All",                  command=lambda: do_stop_all())
+    file_m.add_separator()
+    file_m.add_command(label="Delete",                    command=lambda: do_remove())
+    file_m.add_command(label="Delete Completed",          command=lambda: do_del_completed())
 
-    hm.add_command(label=f"About {APP_NAME}",        command=lambda: about_dialog())
+    dl_m.add_command(label="Options",                     command=lambda: settings_dialog())
+    dl_m.add_command(label="Scheduler",                   command=lambda: schedule_dialog())
+    dl_m.add_command(label="Start Queue",                 command=lambda: do_start_queue())
+    dl_m.add_command(label="Stop Queue",                  command=lambda: do_stop_queue())
+
+    view_m.add_command(label="Toggle Theme",              command=lambda: toggle_theme())
+    view_m.add_command(label="Analytics Dashboard",       command=lambda: dashboard_dialog())
+
+    help_m.add_command(label="Check for Updates",         command=lambda: check_updates())
+    help_m.add_separator()
+    help_m.add_command(label=f"About {APP_NAME}",         command=lambda: about_dialog())
+
+    reg_m.add_command(label="Registration...",            command=lambda: activate_dialog())
+    reg_m.add_command(label="Product Key Activation",     command=lambda: activate_dialog())
 
     root.bind("<Control-n>", lambda _: add_dialog())
     root.bind("<Delete>",    lambda _: do_remove())
@@ -1361,33 +1442,15 @@ def launch_gui():
                              else do_resume()))
     root.bind("<F5>",        lambda _: do_resume())
 
-    # ── HEADER ────────────────────────────────────────────────────────────────
-    hdr = tk.Frame(root, height=50)
-    hdr.pack(fill="x"); hdr.pack_propagate(False)
+    # ── IDM-STYLE TOOLBAR (NO BANNER, SITS DIRECTLY UNDER MENU BAR) ────────────
+    tbar = tk.Frame(root, height=58, bg="#f5f6f7", bd=0)
+    tbar.pack(fill="x")
+    tbar.pack_propagate(False)
 
-    hdr_title = tk.Label(hdr, text=f"☁️  {APP_NAME}", font=FONT_TITLE, anchor="w")
-    hdr_title.pack(side="left", padx=14)
-    hdr_ver   = tk.Label(hdr, text=f"v{VERSION} — Smart Cloud Downloader",
-                          font=FONT_UI, anchor="w")
-    hdr_ver.pack(side="left")
-
-    hdr_spd_var = tk.StringVar(value="")
-    hdr_spd     = tk.Label(hdr, textvariable=hdr_spd_var, font=FONT_MONO, anchor="e")
-    hdr_spd.pack(side="right", padx=14)
-
-    # trial label
-    trial_var = tk.StringVar(value="")
-    trial_lbl = tk.Label(hdr, textvariable=trial_var, font=FONT_UI, anchor="e")
-    trial_lbl.pack(side="right", padx=6)
-
-    # ── TOOLBAR ───────────────────────────────────────────────────────────────
-    tbar = tk.Frame(root, height=48)
-    tbar.pack(fill="x"); tbar.pack_propagate(False)
-
-    sep1 = tk.Frame(root, height=2)
+    sep1 = tk.Frame(root, height=1, bg="#d0d0d0")
     sep1.pack(fill="x")
 
-    # ── CLIPBOARD BANNER ──────────────────────────────────────────────────────
+    # ── CLIPBOARD BANNER ───────────────────────────────────────────────────────
     clip_frame = tk.Frame(root, height=0)
     clip_frame.pack(fill="x")
 
@@ -1414,157 +1477,146 @@ def launch_gui():
     clip_yes.configure(command=lambda: (add_task(_clip_banner["url"]), hide_clip_banner()))
     clip_no.configure(command=hide_clip_banner)
 
-    # ── BODY ──────────────────────────────────────────────────────────────────
-    body = tk.Frame(root)
+    # ── BODY (IDM SPLIT PANE: CATEGORIES LEFT, FULL-HEIGHT TABLE RIGHT) ───────
+    body = tk.Frame(root, bg="#f0f0f0")
     body.pack(fill="both", expand=True)
 
-    # sidebar
-    sidebar = tk.Frame(body, width=170)
-    sidebar.pack(side="left", fill="y"); sidebar.pack_propagate(False)
+    # Categories Sidebar (White box with header like IDM)
+    sidebar = tk.Frame(body, width=195, bg="#ffffff", bd=1, relief="solid")
+    sidebar.pack(side="left", fill="y", padx=(2, 0), pady=(2, 2))
+    sidebar.pack_propagate(False)
 
-    sb_title = tk.Label(sidebar, text="Categories", font=FONT_BOLD, anchor="w")
-    sb_title.pack(fill="x", padx=8, pady=(10,4))
+    sb_hdr = tk.Frame(sidebar, bg="#f0f0f0", height=24)
+    sb_hdr.pack(fill="x")
+    sb_title = tk.Label(sb_hdr, text="Categories", font=FONT_BOLD, anchor="w", bg="#f0f0f0", fg="#333333")
+    sb_title.pack(side="left", padx=6, pady=2)
 
     cat_tree = ttk.Treeview(sidebar, show="tree", selectmode="browse")
     cat_tree.pack(fill="both", expand=True, padx=2, pady=2)
 
     cat_all = cat_tree.insert("", "end", iid="all", text="📁 All Downloads", open=True)
-    cat_tree.insert(cat_all, "end", iid="cat_Compressed", text="🗜 Compressed")
-    cat_tree.insert(cat_all, "end", iid="cat_Documents",  text="📄 Documents")
-    cat_tree.insert(cat_all, "end", iid="cat_Music",      text="🎵 Music")
-    cat_tree.insert(cat_all, "end", iid="cat_Programs",   text="💻 Programs")
-    cat_tree.insert(cat_all, "end", iid="cat_Video",      text="🎬 Video")
-    cat_tree.insert("", "end", iid="unfinished", text="📥 Unfinished")
-    cat_tree.insert("", "end", iid="finished",   text="✅ Finished")
-    cat_tree.insert("", "end", iid="grabber",    text="🌐 Grabber projects")
-    cat_tree.insert("", "end", iid="queues",     text="📋 Queues")
+    cat_tree.insert(cat_all, "end", iid="cat_Compressed", text="🗜  Compressed")
+    cat_tree.insert(cat_all, "end", iid="cat_Documents",  text="📄  Documents")
+    cat_tree.insert(cat_all, "end", iid="cat_Music",      text="🎵  Music")
+    cat_tree.insert(cat_all, "end", iid="cat_Programs",   text="💻  Programs")
+    cat_tree.insert(cat_all, "end", iid="cat_Video",      text="🎬  Video")
+    cat_tree.insert("", "end", iid="unfinished", text="📥  Unfinished")
+    cat_tree.insert("", "end", iid="finished",   text="✅  Finished")
+    cat_tree.insert("", "end", iid="grabber",    text="🌐  Grabber projects")
+    cat_tree.insert("", "end", iid="queues",     text="📋  Queues")
     cat_tree.selection_set("all")
     cat_tree.bind("<<TreeviewSelect>>", lambda _: refresh_tree())
 
-    sb_sep = tk.Frame(body, width=1)
-    sb_sep.pack(side="left", fill="y")
+    # Main area (Full-height white table like IDM)
+    main = tk.Frame(body, bg="#ffffff", bd=1, relief="solid")
+    main.pack(side="left", fill="both", expand=True, padx=(2, 2), pady=(2, 2))
 
-    # main
-    main = tk.Frame(body)
-    main.pack(side="left", fill="both", expand=True)
-
-    # tree
-    tf = tk.Frame(main)
+    tf = tk.Frame(main, bg="#ffffff")
     tf.pack(fill="both", expand=True)
 
-    cols = ("icon","file","size","progress","speed","eta","status")
+    cols = ("file", "q", "size", "status", "eta", "speed", "date", "desc")
     tree = ttk.Treeview(tf, columns=cols, show="headings",
-                        selectmode="browse", height=14)
-    for col,w,lbl,anch in [
-        ("icon",  36,"","center"),("file",310,"Filename","w"),
-        ("size",  80,"Size","center"),("progress",72,"Progress","center"),
-        ("speed",100,"Speed","center"),("eta",70,"ETA","center"),
-        ("status",110,"Status","center"),
+                        selectmode="browse")
+    for col, w, lbl, anch in [
+        ("file",   260, "File Name",       "w"),
+        ("q",      32,  "Q",               "center"),
+        ("size",   90,  "Size",            "center"),
+        ("status", 110, "Status",          "center"),
+        ("eta",    90,  "Time left",       "center"),
+        ("speed",  110, "Transfer rate",   "center"),
+        ("date",   135, "Last Try Date",   "center"),
+        ("desc",   180, "Description",     "w"),
     ]:
-        tree.heading(col,text=lbl)
-        tree.column(col,width=w,anchor=anch,stretch=(col=="file"))
+        tree.heading(col, text=lbl, anchor=anch)
+        tree.column(col, width=w, anchor=anch, stretch=(col in ("file", "desc")))
 
-    vsb = ttk.Scrollbar(tf,orient="vertical",   command=tree.yview)
-    hsb = ttk.Scrollbar(tf,orient="horizontal", command=tree.xview)
+    vsb = ttk.Scrollbar(tf, orient="vertical", command=tree.yview)
+    hsb = ttk.Scrollbar(tf, orient="horizontal", command=tree.xview)
     tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-    vsb.pack(side="right",fill="y")
-    hsb.pack(side="bottom",fill="x")
-    tree.pack(fill="both",expand=True)
+    vsb.pack(side="right", fill="y")
+    hsb.pack(side="bottom", fill="x")
+    tree.pack(fill="both", expand=True)
 
-    # context menu
-    ctx = tk.Menu(root,tearoff=0)
-    ctx.add_command(label="▶  Resume",     command=lambda: do_resume())
-    ctx.add_command(label="⏸  Pause",      command=lambda: do_pause())
-    ctx.add_command(label="⏹  Stop",       command=lambda: do_stop())
+    # Context menu
+    ctx = tk.Menu(root, tearoff=0)
+    ctx.add_command(label="📊  Show Download Status", command=lambda: show_download_dialog(get_sel()))
     ctx.add_separator()
-    ctx.add_command(label="📂  Open Folder",command=lambda: (open_folder(get_sel().filepath) if get_sel() else None))
-    ctx.add_command(label="🔗  Copy URL",   command=lambda: (root.clipboard_clear() or root.clipboard_append(get_sel().url) if get_sel() else None))
-    ctx.add_command(label="🔄  Refresh URL",command=lambda: refresh_url_dialog())
+    ctx.add_command(label="▶  Resume",      command=lambda: do_resume())
+    ctx.add_command(label="⏸  Pause",       command=lambda: do_pause())
+    ctx.add_command(label="⏹  Stop",        command=lambda: do_stop())
     ctx.add_separator()
-    ctx.add_command(label="🗑  Remove",     command=lambda: do_remove())
+    ctx.add_command(label="📁  Open Folder", command=lambda: (open_folder(get_sel().filepath) if get_sel() else None))
+    ctx.add_command(label="🔗  Copy URL",    command=lambda: (root.clipboard_clear() or root.clipboard_append(get_sel().url) if get_sel() else None))
+    ctx.add_command(label="🔄  Refresh URL", command=lambda: refresh_url_dialog())
+    ctx.add_separator()
+    ctx.add_command(label="🗑  Remove",      command=lambda: do_remove())
 
     def show_ctx(e):
         try: tree.selection_set(tree.identify_row(e.y))
         except Exception: pass
-        try: ctx.tk_popup(e.x_root,e.y_root)
+        try: ctx.tk_popup(e.x_root, e.y_root)
         finally: ctx.grab_release()
 
     tree.bind("<Button-3>", show_ctx)
     tree.bind("<<TreeviewSelect>>", lambda _: on_select())
-    tree.bind("<Double-1>", lambda _: (do_resume() if get_sel() and
-                             get_sel().status in ("paused","stopped","error") else None))
+    tree.bind("<Double-1>", lambda _: show_download_dialog(get_sel()))
 
-    # ── DETAIL PANEL ──────────────────────────────────────────────────────────
-    det_sep = tk.Frame(main,height=2)
-    det_sep.pack(fill="x")
+    # ── STATUS BAR (IDM 3-SECTION STATUS BAR) ─────────────────────────────────
+    st_sep = tk.Frame(root, height=1, bg="#d0d0d0")
+    st_sep.pack(fill="x", side="bottom")
+    stbar = tk.Frame(root, height=24, bg="#f0f0f0")
+    stbar.pack(fill="x", side="bottom")
+    stbar.pack_propagate(False)
 
-    det = tk.Frame(main,height=130)
-    det.pack(fill="x"); det.pack_propagate(False)
+    sb_l  = tk.Label(stbar, text=_("ready"), font=FONT_UI, anchor="w", bg="#f0f0f0", fg="#333333")
+    sb_l.pack(side="left", padx=8)
 
-    det_l = tk.Frame(det)
-    det_l.pack(side="left",fill="both",expand=True,padx=10,pady=6)
-    det_r = tk.Frame(det,width=170)
-    det_r.pack(side="right",fill="y",padx=10,pady=6); det_r.pack_propagate(False)
+    trial_var = tk.StringVar(value="")
+    trial_lbl = tk.Label(stbar, textvariable=trial_var, font=FONT_UI, anchor="e", bg="#f0f0f0")
+    trial_lbl.pack(side="right", padx=10)
 
-    det_file  = tk.Label(det_l,text=_("no_select"),font=FONT_BOLD,anchor="w")
-    det_file.pack(fill="x")
-    det_url   = tk.Label(det_l,text="",font=FONT_UI,anchor="w")
-    det_url.pack(fill="x")
-    det_info  = tk.Label(det_l,text="",font=FONT_UI,anchor="w")
-    det_info.pack(fill="x")
-    det_pbar  = ttk.Progressbar(det_l,orient="horizontal",mode="determinate")
-    det_pbar.pack(fill="x",pady=4)
-    det_chunk = tk.Canvas(det_l,height=20)
-    det_chunk.pack(fill="x")
+    hdr_spd_var = tk.StringVar(value="")
+    hdr_spd     = tk.Label(stbar, textvariable=hdr_spd_var, font=FONT_MONO, anchor="e", bg="#f0f0f0", fg="#0066cc")
+    hdr_spd.pack(side="right", padx=14)
 
-    det_st_title = tk.Label(det_r,text="Transfer Info",font=FONT_BOLD,anchor="w")
-    det_st_title.pack(fill="x")
-    det_st_spd   = tk.Label(det_r,text="Speed :  —",font=FONT_MONO,anchor="w")
-    det_st_spd.pack(fill="x")
-    det_st_eta   = tk.Label(det_r,text="ETA   :  —",font=FONT_MONO,anchor="w")
-    det_st_eta.pack(fill="x")
-    det_st_seg   = tk.Label(det_r,text="Segments: —",font=FONT_MONO,anchor="w")
-    det_st_seg.pack(fill="x")
-    det_st_time  = tk.Label(det_r,text="Added :  —",font=FONT_UI,anchor="w")
-    det_st_time.pack(fill="x")
-    det_st_cat   = tk.Label(det_r,text="Category: —",font=FONT_UI,anchor="w")
-    det_st_cat.pack(fill="x")
-
-    # ── STATUS BAR ────────────────────────────────────────────────────────────
-    st_sep = tk.Frame(root,height=2)
-    st_sep.pack(fill="x")
-    stbar = tk.Frame(root,height=24)
-    stbar.pack(fill="x",side="bottom"); stbar.pack_propagate(False)
-    sb_l  = tk.Label(stbar,text=_("ready"),font=FONT_UI,anchor="w")
-    sb_l.pack(side="left",padx=8)
-    sb_r  = tk.Label(stbar,text="",font=FONT_MONO,anchor="e")
-    sb_r.pack(side="right",padx=8)
+    sb_r  = tk.Label(stbar, text="", font=FONT_MONO, anchor="e", bg="#f0f0f0", fg="#666666")
+    sb_r.pack(side="right", padx=8)
 
     # ══════════════════════════════════════════════════════════════════════════
     # TOOLBAR BUTTONS (MATCHES IDM 6.19 & 6.35)
     # ══════════════════════════════════════════════════════════════════════════
-    TB = [
-        ("Add URL",      "➕", lambda: add_dialog(),      68),
-        ("Resume",       "▶",  lambda: do_resume(),       64),
-        ("Stop",         "■",  lambda: do_pause(),        60),
-        ("Stop All",     "✋", lambda: do_stop_all(),     68),
-        ("Delete",       "🗑",  lambda: do_remove(),       64),
-        ("Delete Co...", "🧹", lambda: do_del_completed(),76),
-        ("Options",      "⚙",  lambda: settings_dialog(), 64),
-        ("Scheduler",    "⏰", lambda: schedule_dialog(), 70),
-        ("Start Qu...",  "🚀", lambda: do_start_queue(),  72),
-        ("Stop Qu...",   "🛑", lambda: do_stop_queue(),   72),
-        ("Grabber",      "🌐", lambda: grabber_dialog(),  66),
-        ("Tell a Friend","👥", lambda: about_dialog(),    80),
+    TB_GROUPS = [
+        [
+            ("Add URL",      "＋", lambda: add_dialog(),      66),
+            ("Resume",       "▶",  lambda: do_resume(),       60),
+            ("Stop",         "■",  lambda: do_pause(),        58),
+            ("Stop All",     "✋", lambda: do_stop_all(),     62),
+            ("Delete",       "✕",  lambda: do_remove(),       58),
+            ("Delete Co...", "🧹", lambda: do_del_completed(),74),
+        ],
+        [
+            ("Options",      "⚙",  lambda: settings_dialog(), 60),
+            ("Scheduler",    "⏰", lambda: schedule_dialog(), 66),
+            ("Start Qu...",  "▶",  lambda: do_start_queue(),  68),
+            ("Stop Qu...",   "⏸",  lambda: do_stop_queue(),   68),
+        ],
+        [
+            ("Grabber",      "🌐", lambda: grabber_dialog(),  62),
+            ("Tell a Friend","👥", lambda: about_dialog(),    78),
+        ]
     ]
     tb_btns = {}
-    for name, icon, cmd, w in TB:
-        b = mkbtn(tbar, name, cmd, icon=icon, width=w)
-        b.pack(side="left", padx=1, pady=2)
-        tb_btns[name] = b
+    for g_idx, grp in enumerate(TB_GROUPS):
+        if g_idx > 0:
+            sep = tk.Frame(tbar, width=1, bg="#d0d0d0")
+            sep.pack(side="left", fill="y", padx=3, pady=6)
+        for name, icon, cmd, w in grp:
+            b = mkbtn(tbar, name, cmd, icon=icon, width=w, height=52)
+            b.pack(side="left", padx=1, pady=3)
+            tb_btns[name] = b
 
-    theme_btn = mkbtn(tbar, "Theme", lambda: toggle_theme(), icon="🌙", width=62)
-    theme_btn.pack(side="right", padx=2, pady=2)
+    theme_btn = mkbtn(tbar, "Theme", lambda: toggle_theme(), icon="🌙", width=62, height=52)
+    theme_btn.pack(side="right", padx=4, pady=3)
     all_btns.append(theme_btn)
 
     def get_cat_filter():
@@ -2478,59 +2530,18 @@ del "%~f0" >nul 2>&1
     # DRAW HELPERS
     # ══════════════════════════════════════════════════════════════════════════
     def draw_chunk_map(task):
-        det_chunk.delete("all")
-        t2=T(); w=det_chunk.winfo_width()
-        if w<10 or not task or not hasattr(task,"parts") or not task.parts: return
-        h=20; total=task.size or sum(p["size"] for p in task.parts) or 1; x=0
-        for p in task.parts:
-            pw=max(2,int(w*p["size"]/total)); done_w=int(pw*(p["done"]/p["size"])) if p["size"] else 0
-            det_chunk.create_rectangle(x,2,x+pw-1,h-2,fill=t2["bar_bg"],outline=t2["bg"])
-            if done_w>0: det_chunk.create_rectangle(x,2,x+done_w,h-2,fill=t2["bar_fill"],outline="")
-            if p["finished"]: det_chunk.create_rectangle(x,2,x+pw-1,h-2,fill=t2["green"],outline="")
-            x+=pw
+        pass
 
     def refresh_detail():
-        task=sel["task"]; t2=T()
-        wlist=[det_l,det_r,det_chunk,det_st_title,det_st_spd,det_st_eta,
-               det_st_seg,det_st_time,det_st_cat,det_file,det_url,det_info]
-        for w2 in wlist:
-            try: w2.configure(bg=t2["bg"])
-            except Exception: pass
-        for w2 in [det_file,det_url,det_info,det_st_title,det_st_spd,
-                    det_st_eta,det_st_seg,det_st_time,det_st_cat]:
-            try: w2.configure(fg=t2["fg"])
-            except Exception: pass
-
+        task = sel.get("task")
         if not task:
-            det_file.configure(text=_("no_select"))
-            det_url.configure(text=""); det_info.configure(text="")
-            det_pbar["value"]=0
-            for w2 in [det_st_spd,det_st_eta,det_st_seg,det_st_time,det_st_cat]:
-                w2.configure(text=w2.cget("text").split(":")[0]+":  —")
-            draw_chunk_map(None); return
-
-        det_file.configure(text=task.filename or task.url[:70])
-        det_url.configure(text=task.url[:90]+("…" if len(task.url)>90 else ""))
-        spd=getattr(task,"_speed",0)
-        segs=len(getattr(task,"parts",[])) or 1
-        eta="—"
-        if task.size:
-            det_info.configure(
-                text=f"{human_size(task.downloaded)} / {human_size(task.size)}"
-                     f"  ({task.progress*100:.1f}%)  •  {task.status}"
-                     +(f"  ⚠ {task.error_msg}" if task.error_msg else ""))
-            det_pbar["value"]=task.progress*100
-            if task.status=="downloading" and spd>0:
-                eta=format_eta((task.size-task.downloaded)/max(1,spd))
-        else:
-            det_info.configure(text=f"{human_size(task.downloaded)} downloaded  •  {task.status}")
-            det_pbar["value"]=int(task.progress*100)
-        det_st_spd.configure(text=f"Speed :  {human_speed(spd)}")
-        det_st_eta.configure(text=f"ETA   :  {eta}")
-        det_st_seg.configure(text=f"Segments: {segs}")
-        det_st_time.configure(text=f"Added :  {datetime.fromtimestamp(task.added_at).strftime('%H:%M:%S')}")
-        det_st_cat.configure(text=f"Category: {getattr(task,'category','—')}")
-        draw_chunk_map(task)
+            return
+        fname = getattr(task, "filename", "") or getattr(task, "url", "")[:40]
+        sz = human_size(getattr(task, "size", None))
+        dl = human_size(getattr(task, "downloaded", 0))
+        pct = int((getattr(task, "progress", 0.0) or 0.0) * 100)
+        stat = getattr(task, "status", "ready").capitalize()
+        sb_l.configure(text=f"  Selected: {fname}  •  {dl} / {sz} ({pct}%)  •  {stat}")
 
     def refresh_tree():
         cat_f = get_cat_filter()
@@ -2600,64 +2611,44 @@ del "%~f0" >nul 2>&1
         clip_no.configure(bg=t2["bg2"],fg=t2["fg"],relief="flat")
 
     def apply_theme():
-        t2=T()
+        t2 = T()
         root.configure(bg=t2["bg"])
-        style.configure("TFrame",        background=t2["bg"])
-        style.configure("TLabel",        background=t2["bg"],     foreground=t2["fg"])
-        style.configure("Treeview",      background=t2["tree_bg"],fieldbackground=t2["tree_bg"],
-                        foreground=t2["fg"],rowheight=28)
-        style.configure("Treeview.Heading",background=t2["header_bg"],foreground=t2["header_fg"],
-                        relief="flat",font=FONT_BOLD)
-        style.map("Treeview",background=[("selected",t2["tree_sel"])],
-                  foreground=[("selected",t2["tree_sel_fg"])])
-        style.configure("Horizontal.TProgressbar",background=t2["bar_fill"],
-                        troughcolor=t2["bar_bg"],borderwidth=0,thickness=14)
-        style.configure("TScrollbar",background=t2["sb_bg"],troughcolor=t2["sb_trough"],borderwidth=0)
+        style.configure("TFrame", background=t2["bg"])
+        style.configure("TLabel", background=t2["bg"], foreground=t2["fg"])
+        style.configure("Treeview",
+                        background="#ffffff", fieldbackground="#ffffff",
+                        foreground="#000000", rowheight=24)
+        style.configure("Treeview.Heading",
+                        background="#ececec", foreground="#000000",
+                        relief="raised", font=FONT_BOLD)
+        style.map("Treeview",
+                  background=[("selected", "#3399ff")],
+                  foreground=[("selected", "#ffffff")])
+        style.configure("Horizontal.TProgressbar", background=t2["bar_fill"],
+                        troughcolor=t2["bar_bg"], borderwidth=0, thickness=14)
+        style.configure("TScrollbar", background=t2["sb_bg"], troughcolor=t2["sb_trough"], borderwidth=0)
 
-        for w2 in [hdr,tbar,body,sidebar,main,tf,det,det_l,det_r]:
-            try: w2.configure(bg=t2["bg"])
-            except Exception: pass
-        hdr.configure(bg=t2["toolbar"])
         tbar.configure(bg=t2["toolbar"])
-        sidebar.configure(bg=t2["cat_bg"])
-        sb_sep.configure(bg=t2["sep"])
-        sep1.configure(bg=t2["sep"])
-        det_sep.configure(bg=t2["sep"])
-        stbar.configure(bg=t2["bg2"])
-        st_sep.configure(bg=t2["sep"])
-        hdr_title.configure(bg=t2["toolbar"],fg=t2["accent"])
-        hdr_ver.configure(bg=t2["toolbar"],fg=t2["muted"])
-        hdr_spd.configure(bg=t2["toolbar"],fg=t2["green"])
-        trial_lbl.configure(bg=t2["toolbar"])
-        sb_title.configure(bg=t2["cat_bg"],fg=t2["fg"])
-        # cat_tree styled via ttk theme
-        det_chunk.configure(bg=t2["bg"],highlightthickness=0)
-        for w2 in [det_file,det_url,det_info,det_st_title,det_st_spd,det_st_eta,det_st_seg,det_st_time,det_st_cat]:
-            try: w2.configure(bg=t2["bg"],fg=t2["fg"])
-            except Exception: pass
-        sb_l.configure(bg=t2["bg2"],fg=t2["muted"])
-        sb_r.configure(bg=t2["bg2"],fg=t2["muted"])
+        sep1.configure(bg=t2["border"])
+        stbar.configure(bg=t2["bg"])
+        st_sep.configure(bg=t2["border"])
+        sb_l.configure(bg=t2["bg"], fg=t2["fg"])
+        sb_r.configure(bg=t2["bg"], fg=t2["muted"])
+        hdr_spd.configure(bg=t2["bg"], fg=t2["accent"])
+        trial_lbl.configure(bg=t2["bg"])
+        sidebar.configure(bg="#ffffff", bd=1, relief="solid")
+        sb_hdr.configure(bg="#f0f0f0")
+        sb_title.configure(bg="#f0f0f0", fg="#333333")
+        main.configure(bg="#ffffff", bd=1, relief="solid")
+
         for b in all_btns:
             try: b.reconfigure()
             except Exception: pass
-        theme_btn._icon="🌙" if settings.get("theme")=="dark" else ("☀" if settings.get("theme")=="light" else "🔮")
+        theme_btn._icon = "🌙" if settings.get("theme")=="dark" else ("☀️" if settings.get("theme")=="light" else "🔮")
         theme_btn._draw()
-        ctx.configure(bg=t2["panel"],fg=t2["fg"],
-                      activebackground=t2["tree_sel"],activeforeground=t2["tree_sel_fg"])
-        apply_clip_theme()
-        update_trial_label()
+        ctx.configure(bg=t2["panel"], fg=t2["fg"])
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # BROWSER EXTENSION SERVER
-    # ══════════════════════════════════════════════════════════════════════════
-    ext_server = ExtensionServer(EXT_PORT)
-    def on_ext_url(url, referer):
-        if is_video_stream_url(url):
-            root.after(0, lambda: playlist_dialog(prefill_url=url))
-        else:
-            root.after(0, lambda: add_dialog(prefill_url=url))
-    ext_server.on_url = on_ext_url
-    ext_server.start()
+    update_trial_label()
 
     # ══════════════════════════════════════════════════════════════════════════
     # CLIPBOARD MONITOR
