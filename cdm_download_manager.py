@@ -50,8 +50,8 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME    = "CDM - Cloud Download Manager"
-VERSION     = "2.1.0"
-BUILD_DATE  = "2026-11-21"
+VERSION     = "2.2.0"
+BUILD_DATE  = "2026-11-22"
 TRIAL_DAYS  = 3
 EXT_PORT    = 19876   # local HTTP server for browser extension
 
@@ -990,6 +990,248 @@ class ClipboardMonitor:
             time.sleep(1.0)
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# IDM-STYLE DEDICATED DOWNLOAD PROGRESS POPUP (MATCHES IDM 6.35)
+# ═══════════════════════════════════════════════════════════════════════════════
+class IDMDownloadStatusDialog:
+    """Dedicated IDM-style Download Progress Popup Dialog (Matches IDM 6.35)."""
+    def __init__(self, root, task, get_theme):
+        import tkinter as tk
+        from tkinter import ttk
+        self.root = root
+        self.task = task
+        self.get_theme = get_theme
+        self.win = tk.Toplevel(root)
+        self.win.geometry("540x350")
+        self.win.minsize(500, 320)
+        self._show_details = False
+
+        title_fname = getattr(task, 'filename', '') or 'download'
+        pct_val = int(getattr(task, 'progress', 0) * 100) if getattr(task, 'progress', 0) else 0
+        self.win.title(f"{pct_val}% {title_fname}")
+
+        try:
+            self.win.iconbitmap(str(BASE_DIR / "assets" / "icon.ico"))
+        except Exception:
+            pass
+
+        t = get_theme()
+        self.win.configure(bg=t.get("bg", "#f0f0f0"))
+
+        self.nb = ttk.Notebook(self.win)
+        self.nb.pack(fill="both", expand=True, padx=8, pady=(8, 4))
+
+        self.tab_status = tk.Frame(self.nb, bg="#f5f5f5")
+        self.tab_limiter = tk.Frame(self.nb, bg="#f5f5f5")
+        self.tab_options = tk.Frame(self.nb, bg="#f5f5f5")
+
+        self.nb.add(self.tab_status, text="Download status")
+        self.nb.add(self.tab_limiter, text="Speed Limiter")
+        self.nb.add(self.tab_options, text="Options on completion")
+
+        self._build_status_tab(t)
+        self._build_limiter_tab(t)
+        self._build_options_tab(t)
+
+        self.win.protocol("WM_DELETE_WINDOW", self.win.destroy)
+        self._tick()
+
+    def _build_status_tab(self, t):
+        import tkinter as tk
+        content_box = tk.Frame(self.tab_status, bg="#ffffff", bd=1, relief="solid")
+        content_box.pack(fill="both", expand=True, padx=8, pady=8)
+
+        url_text = getattr(self.task, "url", "")
+        url_disp = url_text[:75] + ("..." if len(url_text) > 75 else "")
+        self.url_lbl = tk.Label(content_box, text=url_disp, bg="#ffffff", fg="#004080",
+                                font=("Segoe UI", 9, "underline"), anchor="w")
+        self.url_lbl.pack(fill="x", padx=10, pady=(6, 2))
+
+        grid_fr = tk.Frame(content_box, bg="#ffffff")
+        grid_fr.pack(fill="x", padx=10, pady=2)
+
+        def make_row(parent, row, label_text, default_val="", fg="#000000"):
+            lbl = tk.Label(parent, text=label_text, bg="#ffffff", fg="#444444", font=("Segoe UI", 9), anchor="w", width=17)
+            lbl.grid(row=row, column=0, sticky="w", pady=1)
+            val = tk.Label(parent, text=default_val, bg="#ffffff", fg=fg,
+                           font=("Segoe UI", 9, "bold" if ("Resume" in label_text or "Status" in label_text) else "normal"), anchor="w")
+            val.grid(row=row, column=1, sticky="w", pady=1)
+            return val
+
+        self.val_status = make_row(grid_fr, 0, "Status", "Receiving data...", fg="#0055aa")
+        self.val_size   = make_row(grid_fr, 1, "File size", "—")
+        self.val_dl     = make_row(grid_fr, 2, "Downloaded", "0 MB (0 %)")
+        self.val_speed  = make_row(grid_fr, 3, "Transfer rate", "0 KB/sec")
+        self.val_eta    = make_row(grid_fr, 4, "Time left", "—")
+        self.val_resume = make_row(grid_fr, 5, "Resume capability", "Yes", fg="#008800")
+
+        self.pbar_canvas = tk.Canvas(content_box, height=22, bg="#e0e0e0", bd=1, relief="sunken", highlightthickness=0)
+        self.pbar_canvas.pack(fill="x", padx=10, pady=(6, 8))
+
+        self.details_fr = tk.Frame(content_box, bg="#ffffff")
+        self.chunk_canvas = tk.Canvas(self.details_fr, height=36, bg="#f5f5f5", bd=1, relief="sunken", highlightthickness=0)
+        self.chunk_canvas.pack(fill="x", padx=4, pady=4)
+
+        btn_fr = tk.Frame(self.tab_status, bg="#f5f5f5")
+        btn_fr.pack(fill="x", padx=8, pady=(0, 6))
+
+        self.btn_details = tk.Button(btn_fr, text="Show details >>", command=self._toggle_details,
+                                     font=("Segoe UI", 9), relief="groove", padx=10, pady=2, cursor="hand2")
+        self.btn_details.pack(side="left")
+
+        self.btn_cancel = tk.Button(btn_fr, text="Cancel", command=self._cancel,
+                                    font=("Segoe UI", 9), relief="groove", padx=14, pady=2, cursor="hand2")
+        self.btn_cancel.pack(side="right", padx=4)
+
+        self.btn_pause = tk.Button(btn_fr, text="Pause", command=self._pause_toggle,
+                                   font=("Segoe UI", 9), relief="groove", padx=14, pady=2, cursor="hand2")
+        self.btn_pause.pack(side="right")
+
+    def _draw_progress_bar(self, pct):
+        self.pbar_canvas.delete("all")
+        w = self.pbar_canvas.winfo_width()
+        h = self.pbar_canvas.winfo_height()
+        if w <= 1: return
+        fill_w = int(w * min(1.0, max(0.0, pct / 100.0)))
+        if fill_w > 0:
+            self.pbar_canvas.create_rectangle(0, 0, fill_w, h, fill="#28a745", outline="#218838")
+            self.pbar_canvas.create_line(0, 1, fill_w, 1, fill="#6ee787")
+        self.pbar_canvas.create_text(w // 2, h // 2, text=f"{pct:.1f}%",
+                                     fill="#000000" if fill_w < w//2 else "#ffffff",
+                                     font=("Segoe UI", 9, "bold"))
+
+    def _draw_chunk_canvas(self):
+        self.chunk_canvas.delete("all")
+        w = self.chunk_canvas.winfo_width()
+        h = self.chunk_canvas.winfo_height()
+        if w <= 1: return
+        parts = getattr(self.task, "parts", [])
+        if not parts:
+            pct = getattr(self.task, "progress", 0.0) or 0.0
+            fill_w = int(w * min(1.0, max(0.0, pct)))
+            self.chunk_canvas.create_rectangle(0, 0, fill_w, h, fill="#007acc", outline="")
+            return
+        n = len(parts)
+        seg_w = w / n
+        for i, p in enumerate(parts):
+            x1 = int(i * seg_w)
+            x2 = int((i + 1) * seg_w) - 2
+            total = max(1, p.end - p.start + 1) if (p.end and p.start is not None) else 1
+            part_pct = min(1.0, p.downloaded / total)
+            part_h = int(h * part_pct)
+            self.chunk_canvas.create_rectangle(x1, 0, x2, h, fill="#e8e8e8", outline="#cccccc")
+            if part_h > 0:
+                self.chunk_canvas.create_rectangle(x1, h - part_h, x2, h, fill="#0055aa", outline="")
+
+    def _toggle_details(self):
+        self._show_details = not self._show_details
+        if self._show_details:
+            self.btn_details.configure(text="Hide details <<")
+            self.details_fr.pack(fill="x", padx=10, pady=(0, 6))
+            self.win.geometry(f"{self.win.winfo_width()}x410")
+        else:
+            self.btn_details.configure(text="Show details >>")
+            self.details_fr.pack_forget()
+            self.win.geometry(f"{self.win.winfo_width()}x340")
+
+    def _pause_toggle(self):
+        if self.task.status == "downloading":
+            self.task.pause()
+            self.btn_pause.configure(text="Resume")
+        else:
+            self.task.start()
+            self.btn_pause.configure(text="Pause")
+
+    def _cancel(self):
+        self.task.stop()
+        self.win.destroy()
+
+    def _build_limiter_tab(self, t):
+        import tkinter as tk
+        fr = tk.Frame(self.tab_limiter, bg="#ffffff", bd=1, relief="solid")
+        fr.pack(fill="both", expand=True, padx=8, pady=8)
+
+        use_var = tk.BooleanVar(value=bool(getattr(self.task, "speed_limit_kbps", 0) > 0))
+        chk = tk.Checkbutton(fr, text="Use Speed Limiter", variable=use_var, bg="#ffffff", font=("Segoe UI", 9, "bold"))
+        chk.pack(anchor="w", padx=14, pady=(14, 8))
+
+        row = tk.Frame(fr, bg="#ffffff")
+        row.pack(anchor="w", padx=14, pady=4)
+        tk.Label(row, text="Maximum download speed:", bg="#ffffff", font=("Segoe UI", 9)).pack(side="left")
+        spd_ent = tk.Entry(row, width=8, font=("Segoe UI", 9))
+        spd_ent.insert(0, str(getattr(self.task, "speed_limit_kbps", 0) or 500))
+        spd_ent.pack(side="left", padx=6)
+        tk.Label(row, text="KB/sec", bg="#ffffff", font=("Segoe UI", 9)).pack(side="left")
+
+        def apply_limiter():
+            if use_var.get():
+                try: self.task.speed_limit_kbps = int(spd_ent.get())
+                except: self.task.speed_limit_kbps = 0
+            else:
+                self.task.speed_limit_kbps = 0
+
+        tk.Button(fr, text="Apply", command=apply_limiter, relief="groove", padx=14, pady=2, cursor="hand2").pack(anchor="w", padx=14, pady=12)
+
+    def _build_options_tab(self, t):
+        import tkinter as tk
+        fr = tk.Frame(self.tab_options, bg="#ffffff", bd=1, relief="solid")
+        fr.pack(fill="both", expand=True, padx=8, pady=8)
+
+        hang_var = tk.BooleanVar(value=False)
+        exit_var = tk.BooleanVar(value=False)
+        shut_var = tk.BooleanVar(value=False)
+
+        tk.Checkbutton(fr, text="Hang up modem when done", variable=hang_var, bg="#ffffff", font=("Segoe UI", 9)).pack(anchor="w", padx=14, pady=(12, 4))
+        tk.Checkbutton(fr, text="Exit CDM when done", variable=exit_var, bg="#ffffff", font=("Segoe UI", 9)).pack(anchor="w", padx=14, pady=4)
+        tk.Checkbutton(fr, text="Turn off computer when done", variable=shut_var, bg="#ffffff", font=("Segoe UI", 9)).pack(anchor="w", padx=14, pady=4)
+
+    def _tick(self):
+        if not self.win.winfo_exists():
+            return
+        task = self.task
+        title_fname = getattr(task, "filename", "") or "download"
+        raw_pct = getattr(task, "progress", 0.0) or 0.0
+        pct_val = raw_pct * 100 if raw_pct else (task.downloaded / task.size * 100 if getattr(task, "size", None) else 0.0)
+        self.win.title(f"{int(pct_val)}% {title_fname}")
+
+        status_text = {
+            "downloading": "Receiving data...",
+            "queued": "Queued",
+            "paused": "Paused",
+            "stopped": "Stopped",
+            "completed": "Complete",
+            "error": f"Error: {task.error_msg[:30]}"
+        }.get(task.status, task.status)
+        self.val_status.configure(text=status_text, fg="#008800" if task.status=="completed" else ("#0055aa" if task.status=="downloading" else "#cc0000"))
+
+        size_str = f"{human_size(task.size)} ({task.size:,} bytes)" if getattr(task, "size", None) else human_size(task.downloaded)
+        self.val_size.configure(text=size_str)
+
+        dl_str = f"{human_size(task.downloaded)} ({pct_val:.2f} %)"
+        self.val_dl.configure(text=dl_str)
+
+        spd = getattr(task, "_speed", 0) if task.status == "downloading" else 0
+        self.val_speed.configure(text=human_speed(spd) if task.status == "downloading" else "0 KB/sec")
+
+        eta_s = format_eta((task.size - task.downloaded) / max(1, spd)) if (getattr(task, "size", None) and task.status == "downloading" and spd > 0) else "—"
+        self.val_eta.configure(text=eta_s)
+
+        res = "Yes" if getattr(task, "supports_range", False) else "No"
+        self.val_resume.configure(text=res, fg="#008800" if res == "Yes" else "#cc0000")
+
+        self._draw_progress_bar(pct_val)
+        if self._show_details:
+            self._draw_chunk_canvas()
+
+        if task.status == "downloading":
+            self.btn_pause.configure(text="Pause", state="normal")
+        elif task.status in ("paused", "stopped"):
+            self.btn_pause.configure(text="Resume", state="normal")
+        elif task.status == "completed":
+            self.btn_pause.configure(state="disabled")
+
+        self.win.after(150, self._tick)
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # GUI
 # ═══════════════════════════════════════════════════════════════════════════════
 def launch_gui():
@@ -1288,41 +1530,69 @@ def launch_gui():
     sb_r.pack(side="right",padx=8)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TOOLBAR BUTTONS
+    # TOOLBAR BUTTONS (MATCHES IDM 6.19 & 6.35)
     # ══════════════════════════════════════════════════════════════════════════
     TB = [
-        ("Add","⬇",None,76), ("Batch","📦",None,76),
-        ("Playlist","🎞️",None,76), ("Grabber","🌐",None,76),
-        ("Torrent","🧲",None,76),
-        ("Pause","⏸",None,72), ("Resume","▶",None,72),
-        ("Stop","⏹",None,72), ("Remove","🗑",None,76),
-        ("Folder","📂",None,76), ("Checksum","✓",None,76),
-        ("MP3","🎵",None,64), ("Schedule","🕒",None,76),
-        ("Settings","⚙",None,76),
+        ("Add URL",      "➕", lambda: add_dialog(),      68),
+        ("Resume",       "▶",  lambda: do_resume(),       64),
+        ("Stop",         "■",  lambda: do_pause(),        60),
+        ("Stop All",     "✋", lambda: do_stop_all(),     68),
+        ("Delete",       "🗑",  lambda: do_remove(),       64),
+        ("Delete Co...", "🧹", lambda: do_del_completed(),76),
+        ("Options",      "⚙",  lambda: settings_dialog(), 64),
+        ("Scheduler",    "⏰", lambda: schedule_dialog(), 70),
+        ("Start Qu...",  "🚀", lambda: do_start_queue(),  72),
+        ("Stop Qu...",   "🛑", lambda: do_stop_queue(),   72),
+        ("Grabber",      "🌐", lambda: grabber_dialog(),  66),
+        ("Tell a Friend","👥", lambda: about_dialog(),    80),
     ]
     tb_btns = {}
-    for name,icon,_cmd,w in TB:
-        b = mkbtn(tbar,name,None,icon=icon,width=w)
-        b.pack(side="left",padx=2,pady=7)
+    for name, icon, cmd, w in TB:
+        b = mkbtn(tbar, name, cmd, icon=icon, width=w)
+        b.pack(side="left", padx=1, pady=2)
         tb_btns[name] = b
 
-    theme_btn = mkbtn(tbar,"Theme",None,icon="🌙",width=76)
-    theme_btn.pack(side="right",padx=2,pady=7)
+    theme_btn = mkbtn(tbar, "Theme", lambda: toggle_theme(), icon="🌙", width=62)
+    theme_btn.pack(side="right", padx=2, pady=2)
     all_btns.append(theme_btn)
 
-    # sidebar categories
-    CAT_FILTER = ["All Downloads"] + list(CATEGORIES.keys()) + [
-        "Others","── Completed","── Downloading","── Paused","── Error"]
-    for item in CAT_FILTER:
-        icon = CAT_ICONS.get(item.lstrip("─ "),"")
-        cat_lb.insert("end", f"  {icon} {item}".rstrip())
-    cat_lb.select_set(0)
-    cat_lb.bind("<<ListboxSelect>>", lambda _: refresh_tree())
-
     def get_cat_filter():
-        idx = cat_lb.curselection()
-        if not idx: return "All Downloads"
-        return CAT_FILTER[idx[0]].strip().lstrip("─ ")
+        sel = cat_tree.selection()
+        return sel[0] if sel else "all"
+
+    active_dialogs = {}
+    def show_download_dialog(task):
+        if not task: return
+        dlg = active_dialogs.get(id(task))
+        if dlg and dlg.win.winfo_exists():
+            dlg.win.deiconify()
+            dlg.win.lift()
+            dlg.win.focus_force()
+        else:
+            active_dialogs[id(task)] = IDMDownloadStatusDialog(root, task, T)
+
+    def do_stop_all():
+        for t2 in tasks:
+            if t2.status in ("downloading", "queued"):
+                t2.pause()
+
+    def do_start_queue():
+        for t2 in tasks:
+            if t2.status in ("queued", "paused", "stopped"):
+                t2.start()
+
+    def do_stop_queue():
+        for t2 in tasks:
+            if t2.status == "queued":
+                t2.status = "stopped"
+
+    def do_del_completed():
+        to_del = [t2 for t2 in tasks if t2.status == "completed"]
+        for t2 in to_del:
+            iid = str(id(t2))
+            if tree.exists(iid):
+                tree.delete(iid)
+            tasks.remove(t2)
 
     # ══════════════════════════════════════════════════════════════════════════
     # TASK HELPERS
@@ -1355,10 +1625,13 @@ def launch_gui():
                                 referer=referer)
         task.on_complete = on_task_complete
         tasks.append(task)
-        icon = CAT_ICONS.get(task.category,"📁")
-        tree.insert("","end",iid=str(id(task)),
-                    values=(icon,task.filename or url,"?","0%","—","—","queued"))
-        if autostart: task.start()
+        icon = CAT_ICONS.get(task.category, "📁")
+        date_s = datetime.fromtimestamp(task.added_at).strftime("%b %d %H:%M:%S %Y")
+        tree.insert("", "end", iid=str(id(task)),
+                    values=(f"{icon}  {task.filename or url[:35]}", "", "?", "Queued", "—", "—", date_s, url[:50]))
+        if autostart:
+            task.start()
+            root.after(100, lambda: show_download_dialog(task))
         return task
 
     def on_task_complete(task):
@@ -1439,21 +1712,7 @@ def launch_gui():
         apply_theme()
 
     # ── wire toolbar ──────────────────────────────────────────────────────────
-    tb_btns["Add"]._cmd      = lambda: add_dialog()
-    tb_btns["Batch"]._cmd    = lambda: batch_dialog()
-    tb_btns["Playlist"]._cmd = lambda: playlist_dialog()
-    tb_btns["Grabber"]._cmd  = lambda: grabber_dialog()
-    tb_btns["Torrent"]._cmd  = lambda: torrent_dialog()
-    tb_btns["Pause"]._cmd    = do_pause
-    tb_btns["Resume"]._cmd   = do_resume
-    tb_btns["Stop"]._cmd     = do_stop
-    tb_btns["Remove"]._cmd   = do_remove
-    tb_btns["Folder"]._cmd   = lambda: open_folder(settings["download_dir"])
-    tb_btns["Checksum"]._cmd = do_checksum
-    tb_btns["MP3"]._cmd      = do_mp3
-    tb_btns["Schedule"]._cmd = lambda: schedule_dialog()
-    tb_btns["Settings"]._cmd = lambda: settings_dialog()
-    theme_btn._cmd           = toggle_theme
+    # Toolbar buttons assigned at creation
 
     # ══════════════════════════════════════════════════════════════════════════
     # DIALOGS
@@ -2263,32 +2522,39 @@ del "%~f0" >nul 2>&1
         draw_chunk_map(task)
 
     def refresh_tree():
-        cat_f=get_cat_filter().strip().lstrip("─ ")
+        cat_f = get_cat_filter()
         for task in tasks:
-            iid=str(id(task))
+            iid = str(id(task))
             if not tree.exists(iid): continue
-            show=True
-            if cat_f=="All Downloads": show=True
-            elif cat_f=="Completed":   show=task.status=="completed"
-            elif cat_f=="Downloading": show=task.status=="downloading"
-            elif cat_f=="Paused":      show=task.status=="paused"
-            elif cat_f=="Error":       show=task.status=="error"
-            else:                      show=getattr(task,"category","")== cat_f
+            show = True
+            if cat_f == "all": show = True
+            elif cat_f == "cat_Compressed": show = (getattr(task, "category", "") == "Compressed")
+            elif cat_f == "cat_Documents":  show = (getattr(task, "category", "") == "Documents")
+            elif cat_f == "cat_Music":      show = (getattr(task, "category", "") == "Music")
+            elif cat_f == "cat_Programs":   show = (getattr(task, "category", "") == "Programs")
+            elif cat_f == "cat_Video":      show = (getattr(task, "category", "") == "Video")
+            elif cat_f == "unfinished":     show = (task.status in ("downloading", "queued", "paused", "stopped"))
+            elif cat_f == "finished":       show = (task.status == "completed")
+            elif cat_f == "queues":         show = (task.status == "queued")
+            elif cat_f == "grabber":        show = ("grabber" in getattr(task, "source", ""))
 
             if show:
-                pct    = f"{task.progress*100:.1f}%" if task.size else ("—" if isinstance(task,DownloadTask) else f"{int(task.progress*100)}%")
-                size_s = human_size(task.size) if task.size else human_size(task.downloaded)
-                spd    = getattr(task,"_speed",0) if task.status=="downloading" else 0
-                eta    = format_eta((task.size-task.downloaded)/max(1,spd)) \
-                         if (task.size and task.status=="downloading" and spd>0) else "—"
-                speed_s= human_speed(spd) if task.status=="downloading" else "—"
-                icon   = CAT_ICONS.get(getattr(task,"category",""),"📁")
-                stat_s = task.status+(f" ({task.error_msg[:25]})" if task.error_msg and task.status=="error" else "")
-                tree.item(iid,values=(icon,task.filename or task.url[:40],size_s,pct,speed_s,eta,stat_s))
-                col=STATUS_COLORS.get(task.status,"#e0e0e0")
-                tree.tag_configure(task.status,foreground=col)
-                tree.item(iid,tags=(task.status,))
-                try: tree.reattach(iid,"","end")
+                raw_pct = getattr(task, "progress", 0.0) or 0.0
+                pct = f"{raw_pct*100:.1f}%" if getattr(task, "size", None) else ("—" if isinstance(task, DownloadTask) else f"{int(raw_pct*100)}%")
+                size_s = human_size(task.size) if getattr(task, "size", None) else human_size(task.downloaded)
+                spd = getattr(task, "_speed", 0) if task.status == "downloading" else 0
+                eta = format_eta((task.size - task.downloaded) / max(1, spd)) if (getattr(task, "size", None) and task.status == "downloading" and spd > 0) else "—"
+                speed_s = human_speed(spd) if task.status == "downloading" else "—"
+                icon = CAT_ICONS.get(getattr(task, "category", ""), "📁")
+                date_s = datetime.fromtimestamp(task.added_at).strftime("%b %d %H:%M:%S %Y") if getattr(task, "added_at", None) else "—"
+                stat_s = "Complete" if task.status == "completed" else (f"{pct}" if task.status == "downloading" else task.status.capitalize())
+                desc_s = getattr(task, "url", "")[:50]
+
+                tree.item(iid, values=(f"{icon}  {task.filename or task.url[:35]}", "", size_s, stat_s, eta, speed_s, date_s, desc_s))
+                col = STATUS_COLORS.get(task.status, "#e0e0e0")
+                tree.tag_configure(task.status, foreground=col)
+                tree.item(iid, tags=(task.status,))
+                try: tree.reattach(iid, "", "end")
                 except Exception: pass
             else:
                 try: tree.detach(iid)
