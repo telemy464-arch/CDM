@@ -4,7 +4,7 @@
 ; ═══════════════════════════════════════════════════════════════════════
 
 #define AppName      "CDM - Cloud Download Manager"
-#define AppVersion   "2.3.1"
+#define AppVersion   "2.3.2"
 #define AppPublisher "CDM Technology"
 #define AppURL       "https://github.com/telemy464-arch/CDM"
 #define AppExeName   "CDM.exe"
@@ -89,6 +89,11 @@ Root: HKCU; Subkey: "Software\Classes\CDM.torrent\shell\open\command"; ValueType
 Root: HKCU; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: ""; ValueData: "URL:Magnet Protocol"; Tasks: assoc_torrent
 Root: HKCU; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: assoc_torrent
 Root: HKCU; Subkey: "Software\Classes\magnet\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""; Tasks: assoc_torrent
+
+; cdm: protocol handler for browser extension launch
+Root: HKCU; Subkey: "Software\Classes\cdm"; ValueType: string; ValueName: ""; ValueData: "URL:CDM Protocol"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\cdm"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\cdm\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
 
 ; Product Key & License Registry
 Root: HKCU; Subkey: "Software\CDM"; Flags: uninsdeletekey

@@ -1,11 +1,15 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.3.1",
-  "release_date": "2026-11-22",
+  "version": "2.3.2",
+  "release_date": "2026-11-23",
   "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.0.exe",
   "changelog": [
+    "⚡ Instant 1-Click Video Download: clicking 'Download Video' in browser starts download immediately without extra clicks",
+    "🎬 Added IDM-style resolution dropdown directly in YouTube player (4K, 2K, 1080p, 720p, 480p, MP3)",
+    "🔗 Registered custom 'cdm://' protocol: automatically wakes up and launches CDM if closed",
+    "⚠️ Real-time extension status feedback (alerts if CDM is closed instead of falsely saying sent)",
     "🎬 Fixed YouTube, Facebook, TikTok & stream video downloading: real video files (MP4/MKV) downloaded directly, no HTML links",
-    "⚡ Removed command console popup window during video downloads (completely silent & clean background process)",
+    "⚡ Silent yt-dlp execution without command prompt black window",
     "📊 Accurate video progress & file size tracking in download status dialog (never shows 0 B)",
     "⏹ Automatic dialog close option upon download completion (no stacking windows)",
     "📂 Integrated Open & Open Folder directly from completion dialog",
@@ -17,7 +21,7 @@
     "🚀 Seamless zero-click automatic force update"
   ],
   "mandatory": true,
-  "sha256": "9da77a1592d938d017ff224b41aa613d4570859e4948b9d7c689dd5e7d267888",
-  "size_bytes": 15837970,
+  "sha256": "2a990967e93cc74f81fc184fd330cbad53e3e95ac03bf8e464d939d05eb1371b",
+  "size_bytes": 15842831,
   "min_os": "Windows 10 / 11"
 }

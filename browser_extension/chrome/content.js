@@ -1,11 +1,8 @@
 // CDM - Cloud Download Manager - Content Script
-// Adds IDM-style floating download buttons on video elements and streaming media
+// Adds IDM-style floating download button with quality selection dropdown on video players
 
 (function () {
   'use strict';
-
-  const CDM_PORT = 19876;
-  const VIDEO_EXTS = /\.(mp4|mkv|webm|avi|mov|flv|m3u8|mpd|ts|aac|mp3|flac|m4a|m4v)/i;
 
   function isYouTube() {
     return location.hostname.includes('youtube.com') || location.hostname.includes('youtu.be');
@@ -15,85 +12,204 @@
     return location.hostname.includes('facebook.com') || location.hostname.includes('fb.watch');
   }
 
-  // Create IDM-style floating download button
-  function createDownloadButton(videoEl) {
-    if (videoEl.dataset.cdmAttached) return;
-    videoEl.dataset.cdmAttached = 'true';
+  const QUALITIES = [
+    { id: 'best', label: '🌟 Best Quality (Auto)' },
+    { id: '1080p', label: '🎬 1080p (Full HD)' },
+    { id: '720p', label: '🎬 720p (HD)' },
+    { id: '480p', label: '🎬 480p (SD)' },
+    { id: '4k', label: '🎬 4K (2160p)' },
+    { id: '2k', label: '🎬 2K (1440p)' },
+    { id: 'audio', label: '🎵 Audio Only (MP3)' }
+  ];
 
-    const btn = document.createElement('div');
-    btn.className = 'cdm-download-btn-overlay';
-    btn.innerHTML = `
+  function getTargetUrl(videoEl) {
+    if (isYouTube() || isFacebook()) {
+      return location.href;
+    }
+    return videoEl?.currentSrc || videoEl?.src || videoEl?.querySelector('source')?.src || location.href;
+  }
+
+  function startDownload(targetUrl, quality = 'best', statusBtn) {
+    if (!statusBtn) return;
+    const originalHtml = `
       <div style="display:flex;align-items:center;gap:6px;">
         <span style="font-size:14px;">⚡</span>
         <span>Download Video (CDM)</span>
       </div>
     `;
-    btn.title = "Download this video with CDM (Cloud Download Manager)";
-    btn.style.cssText = `
+
+    statusBtn.innerHTML = `<span>⏳ Connecting to CDM...</span>`;
+    statusBtn.style.background = '#ffc107';
+    statusBtn.style.color = '#000000';
+
+    chrome.runtime.sendMessage({
+      type: 'SEND_URL',
+      url: targetUrl,
+      referer: location.href,
+      quality: quality
+    }, (res) => {
+      if (chrome.runtime.lastError || !res || !res.ok) {
+        statusBtn.innerHTML = `<span>⚠️ CDM not running! Opening CDM...</span>`;
+        statusBtn.style.background = '#dc3545';
+        statusBtn.style.color = '#ffffff';
+
+        // Attempt protocol launch
+        try {
+          window.location.href = `cdm://add?url=${encodeURIComponent(targetUrl)}&quality=${encodeURIComponent(quality)}`;
+        } catch (e) {}
+
+        setTimeout(() => {
+          statusBtn.innerHTML = originalHtml;
+          statusBtn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+          statusBtn.style.color = '#ffffff';
+        }, 4000);
+      } else {
+        statusBtn.innerHTML = `<span>⚡ Downloading in CDM!</span>`;
+        statusBtn.style.background = '#198754';
+        statusBtn.style.color = '#ffffff';
+
+        setTimeout(() => {
+          statusBtn.innerHTML = originalHtml;
+          statusBtn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+          statusBtn.style.color = '#ffffff';
+        }, 3000);
+      }
+    });
+  }
+
+  // Create IDM-style floating download widget
+  function createDownloadButton(videoEl) {
+    if (videoEl.dataset.cdmAttached) return;
+    videoEl.dataset.cdmAttached = 'true';
+
+    const widget = document.createElement('div');
+    widget.className = 'cdm-download-btn-overlay';
+    widget.style.cssText = `
       position: absolute;
       top: 12px;
       right: 12px;
       z-index: 2147483647;
-      background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
-      color: #ffffff;
-      padding: 6px 14px;
-      border-radius: 6px;
+      display: inline-flex;
+      align-items: stretch;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 13px;
       font-weight: 600;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.3);
       user-select: none;
       transition: all 0.2s ease;
-      opacity: 0.92;
+      opacity: 0.95;
     `;
 
-    btn.onmouseenter = () => {
-      btn.style.opacity = '1.0';
-      btn.style.transform = 'scale(1.04)';
-      btn.style.boxShadow = '0 6px 16px rgba(13,110,253,0.6)';
-    };
-    btn.onmouseleave = () => {
-      btn.style.opacity = '0.92';
-      btn.style.transform = 'scale(1.0)';
-      btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-    };
+    // Main download button
+    const mainBtn = document.createElement('div');
+    mainBtn.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+      color: #ffffff;
+      padding: 6px 12px;
+      border-top-left-radius: 5px;
+      border-bottom-left-radius: 5px;
+      cursor: pointer;
+      transition: background 0.2s;
+    `;
+    mainBtn.title = "Download this video in CDM (Cloud Download Manager)";
+    mainBtn.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:14px;">⚡</span>
+        <span>Download Video (CDM)</span>
+      </div>
+    `;
 
-    btn.onclick = (e) => {
+    // Dropdown arrow button
+    const arrowBtn = document.createElement('div');
+    arrowBtn.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #084298;
+      color: #ffffff;
+      padding: 0 9px;
+      border-top-right-radius: 5px;
+      border-bottom-right-radius: 5px;
+      cursor: pointer;
+      border-left: 1px solid rgba(255,255,255,0.25);
+      font-size: 11px;
+    `;
+    arrowBtn.title = "Select video quality/resolution";
+    arrowBtn.innerHTML = `▼`;
+
+    // Quality dropdown menu
+    const menu = document.createElement('div');
+    menu.style.cssText = `
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      background: #1e1e24;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      display: none;
+      flex-direction: column;
+      min-width: 175px;
+      padding: 4px 0;
+      z-index: 2147483647;
+    `;
+
+    QUALITIES.forEach(q => {
+      const item = document.createElement('div');
+      item.style.cssText = `
+        padding: 7px 14px;
+        color: #f0f0f0;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      `;
+      item.innerText = q.label;
+      item.onmouseenter = () => { item.style.background = '#0d6efd'; };
+      item.onmouseleave = () => { item.style.background = 'transparent'; };
+      item.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        menu.style.display = 'none';
+        const targetUrl = getTargetUrl(videoEl);
+        startDownload(targetUrl, q.id, mainBtn);
+      };
+      menu.appendChild(item);
+    });
+
+    widget.appendChild(mainBtn);
+    widget.appendChild(arrowBtn);
+    widget.appendChild(menu);
+
+    mainBtn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-
-      let targetUrl = '';
-      if (isYouTube() || isFacebook()) {
-        targetUrl = location.href;
-      } else {
-        targetUrl = videoEl.currentSrc || videoEl.src || videoEl.querySelector('source')?.src || location.href;
-      }
-
-      btn.innerHTML = `<span>⏳ Sending to CDM...</span>`;
-      btn.style.background = '#ffc107';
-      btn.style.color = '#000000';
-
-      chrome.runtime.sendMessage({
-        type: 'SEND_URL',
-        url: targetUrl,
-        referer: location.href
-      }, (res) => {
-        btn.innerHTML = `<span>✓ Sent to CDM!</span>`;
-        btn.style.background = '#198754';
-        btn.style.color = '#ffffff';
-        setTimeout(() => {
-          btn.innerHTML = `
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:14px;">⚡</span>
-              <span>Download Video (CDM)</span>
-            </div>
-          `;
-          btn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
-        }, 2500);
-      });
+      menu.style.display = 'none';
+      const targetUrl = getTargetUrl(videoEl);
+      startDownload(targetUrl, 'best', mainBtn);
     };
+
+    arrowBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+    };
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!widget.contains(e.target)) {
+        menu.style.display = 'none';
+      }
+    });
 
     // Attach to video container
     let container = videoEl.parentElement;
@@ -105,7 +221,7 @@
       if (pos === 'static') {
         container.style.position = 'relative';
       }
-      container.appendChild(btn);
+      container.appendChild(widget);
     }
   }
 

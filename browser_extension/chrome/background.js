@@ -76,15 +76,19 @@ function getExt(url) {
   } catch { return ''; }
 }
 
-function sendToCDM(url, referer) {
-  fetch(CDM_HOST + "/add", {
+function sendToCDM(url, referer, quality) {
+  return fetch(CDM_HOST + "/add", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, referer: referer || "" })
-  }).then(r => r.json()).then(data => {
-    console.log("Sent to CDM successfully:", url);
-  }).catch((err) => {
-    console.warn("Could not reach CDM server:", err);
+    body: JSON.stringify({
+      url,
+      referer: referer || "",
+      quality: quality || "best",
+      autostart: true
+    })
+  }).then(r => {
+    if (!r.ok) throw new Error("HTTP error " + r.status);
+    return r.json();
   });
 }
 
@@ -94,13 +98,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     extensionEnabled = msg.value;
     chrome.storage.local.set({ enabled: msg.value });
     sendResponse({ ok: true });
+    return false;
   }
   if (msg.type === "SEND_URL") {
-    sendToCDM(msg.url, msg.referer);
-    sendResponse({ ok: true });
+    sendToCDM(msg.url, msg.referer, msg.quality)
+      .then(data => {
+        console.log("Sent to CDM successfully:", msg.url);
+        sendResponse({ ok: true, data });
+      })
+      .catch(err => {
+        console.warn("Could not reach CDM server:", err);
+        sendResponse({ ok: false, error: err.message || "CDM unreachable" });
+      });
+    return true; // Keep message channel open for async response
   }
   if (msg.type === "GET_STATE") {
     sendResponse({ enabled: extensionEnabled });
+    return false;
   }
   return true;
 });

@@ -50,8 +50,8 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.1"
-BUILD_DATE      = "2026-11-22"
+VERSION         = "2.3.2"
+BUILD_DATE      = "2026-11-23"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
 WHATSAPP_NUMBER = "8801810936126"
@@ -1095,14 +1095,16 @@ class ExtensionServer:
                         data = json.loads(body)
                         url  = data.get("url","")
                         ref  = data.get("referer","")
+                        quality = data.get("quality","best")
+                        autostart = data.get("autostart", True)
                         if url and parent.on_url:
-                            parent.on_url(url, ref)
+                            parent.on_url(url, ref, quality, autostart)
                     except Exception: pass
                     self.send_response(200)
                     self._cors()
                     self.send_header("Content-Type","application/json")
                     self.end_headers()
-                    self.wfile.write(b'{"ok":true}')
+                    self.wfile.write(b'{"ok":true,"status":"started"}')
             def _cors(self):
                 self.send_header("Access-Control-Allow-Origin","*")
                 self.send_header("Access-Control-Allow-Headers","Content-Type")
@@ -1432,7 +1434,7 @@ class IDMDownloadStatusDialog:
 # ═══════════════════════════════════════════════════════════════════════════════
 # GUI
 # ═══════════════════════════════════════════════════════════════════════════════
-def launch_gui():
+def launch_gui(initial_url=None, initial_quality=None):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox, simpledialog
 
@@ -2934,13 +2936,32 @@ del "%~f0" >nul 2>&1
     # BROWSER EXTENSION SERVER (PORT 19876)
     # ══════════════════════════════════════════════════════════════════════════
     ext_server = ExtensionServer(EXT_PORT)
-    def on_ext_url(url, referer):
-        if is_video_stream_url(url):
-            root.after(0, lambda: playlist_dialog(prefill_url=url))
-        else:
-            root.after(0, lambda: add_dialog(prefill_url=url))
+    def on_ext_url(url, referer="", quality="best", autostart=True):
+        def _handle():
+            try:
+                root.deiconify()
+                root.lift()
+                root.attributes("-topmost", True)
+                root.after(400, lambda: root.attributes("-topmost", False))
+                root.focus_force()
+            except Exception: pass
+
+            if is_video_stream_url(url):
+                q = quality or settings.get("yt_quality", "best")
+                fmt = settings.get("yt_format", "mp4")
+                task = add_task(url, autostart=True, referer=referer, is_ytdlp=True, quality=q, fmt=fmt)
+                show_download_dialog(task)
+            else:
+                task = add_task(url, autostart=True, referer=referer)
+                show_download_dialog(task)
+
+        root.after(0, _handle)
+
     ext_server.on_url = on_ext_url
     ext_server.start()
+
+    if initial_url:
+        root.after(600, lambda: on_ext_url(initial_url, "", quality=initial_quality or "best"))
 
     # ══════════════════════════════════════════════════════════════════════════
     # CLIPBOARD MONITOR
@@ -3018,9 +3039,64 @@ del "%~f0" >nul 2>&1
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════════
-def main():
+def register_cdm_protocol():
+    if sys.platform != "win32": return
     try:
-        launch_gui()
+        import winreg
+        exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
+        if not getattr(sys, 'frozen', False):
+            cmd = f'"{sys.executable}" "{exe_path}" "%1"'
+        else:
+            cmd = f'"{exe_path}" "%1"'
+        key_path = r"Software\Classes\cdm"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:CDM Protocol")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path + r"\shell\open\command") as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, cmd)
+    except Exception:
+        pass
+
+def parse_launch_url():
+    if len(sys.argv) > 1:
+        arg = sys.argv[1].strip()
+        url = ""
+        quality = "best"
+        if arg.startswith("cdm://"):
+            try:
+                raw = arg[6:]
+                if raw.startswith("add?"):
+                    raw = raw[4:]
+                parsed = urllib.parse.parse_qs(raw)
+                if "url" in parsed:
+                    url = parsed["url"][0]
+                if "quality" in parsed:
+                    quality = parsed["quality"][0]
+            except Exception:
+                pass
+        elif arg.startswith(("http://", "https://", "magnet:?")):
+            url = arg
+        return url, quality
+    return None, None
+
+def main():
+    register_cdm_protocol()
+    url, quality = parse_launch_url()
+    if url:
+        # If CDM is already running on port 19876, forward to it and exit!
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{EXT_PORT}/add",
+                data=json.dumps({"url": url, "quality": quality, "autostart": True}).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    sys.exit(0)
+        except Exception:
+            pass
+    try:
+        launch_gui(initial_url=url, initial_quality=quality)
     except ImportError as e:
         print(f"Tkinter not found: {e}\nInstall Python with tkinter support.")
         sys.exit(1)
