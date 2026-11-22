@@ -38,7 +38,7 @@
       </div>
     `;
 
-    statusBtn.innerHTML = `<span>⏳ Connecting to CDM...</span>`;
+    statusBtn.innerHTML = `<span>⏳ Starting Download...</span>`;
     statusBtn.style.background = '#ffc107';
     statusBtn.style.color = '#000000';
 
@@ -51,19 +51,28 @@
       quality: quality
     }, (res) => {
       if (rt.runtime.lastError || !res || !res.ok) {
-        statusBtn.innerHTML = `<span>⚠️ CDM not running! Opening CDM...</span>`;
-        statusBtn.style.background = '#dc3545';
-        statusBtn.style.color = '#ffffff';
+        statusBtn.innerHTML = `<span>🚀 Launching CDM...</span>`;
+        statusBtn.style.background = '#0dcaf0';
+        statusBtn.style.color = '#000000';
 
         try {
-          window.location.href = `cdm://add?url=${encodeURIComponent(targetUrl)}&quality=${encodeURIComponent(quality)}`;
+          const a = document.createElement('a');
+          a.href = `cdm://add?url=${encodeURIComponent(targetUrl)}&quality=${encodeURIComponent(quality)}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
         } catch (e) {}
 
         setTimeout(() => {
-          statusBtn.innerHTML = originalHtml;
-          statusBtn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+          statusBtn.innerHTML = `<span>⚡ Sent to CDM!</span>`;
+          statusBtn.style.background = '#198754';
           statusBtn.style.color = '#ffffff';
-        }, 4000);
+          setTimeout(() => {
+            statusBtn.innerHTML = originalHtml;
+            statusBtn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+            statusBtn.style.color = '#ffffff';
+          }, 2500);
+        }, 1200);
       } else {
         statusBtn.innerHTML = `<span>⚡ Downloading in CDM!</span>`;
         statusBtn.style.background = '#198754';

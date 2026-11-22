@@ -1434,7 +1434,7 @@ class IDMDownloadStatusDialog:
 # ═══════════════════════════════════════════════════════════════════════════════
 # GUI
 # ═══════════════════════════════════════════════════════════════════════════════
-def launch_gui(initial_url=None, initial_quality=None):
+def launch_gui(initial_url=None, initial_quality=None, minimized=False):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox, simpledialog
 
@@ -1597,8 +1597,14 @@ def launch_gui(initial_url=None, initial_quality=None):
     tasks_m.add_command(label="Playlist / YouTube",       command=lambda: playlist_dialog())
     tasks_m.add_command(label="Site Grabber",             command=lambda: grabber_dialog())
     tasks_m.add_command(label="Torrent / Magnet",         command=lambda: torrent_dialog())
+    def do_full_exit():
+        clip_mon.stop()
+        ext_server.stop()
+        root.destroy()
+        sys.exit(0)
+
     tasks_m.add_separator()
-    tasks_m.add_command(label="Exit",                     command=root.quit)
+    tasks_m.add_command(label="Exit",                     command=do_full_exit)
 
     file_m.add_command(label="Stop download",             command=lambda: do_pause())
     file_m.add_command(label="Pause download",            command=lambda: do_pause())
@@ -2949,11 +2955,9 @@ del "%~f0" >nul 2>&1
             if is_video_stream_url(url):
                 q = quality or settings.get("yt_quality", "best")
                 fmt = settings.get("yt_format", "mp4")
-                task = add_task(url, autostart=True, referer=referer, is_ytdlp=True, quality=q, fmt=fmt)
-                show_download_dialog(task)
+                add_task(url, autostart=True, referer=referer, is_ytdlp=True, quality=q, fmt=fmt)
             else:
-                task = add_task(url, autostart=True, referer=referer)
-                show_download_dialog(task)
+                add_task(url, autostart=True, referer=referer)
 
         root.after(0, _handle)
 
@@ -2980,8 +2984,11 @@ del "%~f0" >nul 2>&1
     # ══════════════════════════════════════════════════════════════════════════
     # STARTUP CHECK
     # ══════════════════════════════════════════════════════════════════════════
-    root.deiconify()
-    root.lift()
+    if minimized:
+        root.withdraw()
+    else:
+        root.deiconify()
+        root.lift()
     if not trial.is_valid:
         root.after(200, lambda: activate_dialog(mandatory=True))
     if settings.get("auto_update_check", True):
@@ -3025,9 +3032,13 @@ del "%~f0" >nul 2>&1
     # WINDOW CLOSE
     # ══════════════════════════════════════════════════════════════════════════
     def on_close():
-        clip_mon.stop()
-        ext_server.stop()
-        root.destroy()
+        # Minimize to background so browser extension & downloads remain active (IDM style)
+        root.withdraw()
+        if not getattr(root, "_bg_notified", False):
+            root._bg_notified = True
+            try:
+                windows_notify("CDM is running in the background", "CDM remains active to catch all browser downloads. Select Tasks -> Exit to close completely.")
+            except Exception: pass
 
     root.protocol("WM_DELETE_WINDOW", on_close)
 
@@ -3046,25 +3057,37 @@ def register_cdm_protocol():
         exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
         if not getattr(sys, 'frozen', False):
             cmd = f'"{sys.executable}" "{exe_path}" "%1"'
+            startup_cmd = f'"{sys.executable}" "{exe_path}" --minimized'
         else:
             cmd = f'"{exe_path}" "%1"'
+            startup_cmd = f'"{exe_path}" --minimized'
         key_path = r"Software\Classes\cdm"
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as k:
             winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:CDM Protocol")
             winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path + r"\shell\open\command") as k:
             winreg.SetValueEx(k, "", 0, winreg.REG_SZ, cmd)
+
+        # Register auto-start on Windows boot (runs minimized in background)
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE) as rk:
+                winreg.SetValueEx(rk, "CDM", 0, winreg.REG_SZ, startup_cmd)
+        except Exception:
+            pass
     except Exception:
         pass
 
 def parse_launch_url():
-    if len(sys.argv) > 1:
-        arg = sys.argv[1].strip()
-        url = ""
-        quality = "best"
-        if arg.startswith("cdm://"):
+    is_minimized = False
+    url = ""
+    quality = "best"
+    for arg in sys.argv[1:]:
+        a = arg.strip()
+        if a in ("--minimized", "--tray", "--background", "-silent", "/silent"):
+            is_minimized = True
+        elif a.startswith("cdm://"):
             try:
-                raw = arg[6:]
+                raw = a[6:]
                 if raw.startswith("add?"):
                     raw = raw[4:]
                 parsed = urllib.parse.parse_qs(raw)
@@ -3074,14 +3097,13 @@ def parse_launch_url():
                     quality = parsed["quality"][0]
             except Exception:
                 pass
-        elif arg.startswith(("http://", "https://", "magnet:?")):
-            url = arg
-        return url, quality
-    return None, None
+        elif a.startswith(("http://", "https://", "magnet:?")):
+            url = a
+    return url, quality, is_minimized
 
 def main():
     register_cdm_protocol()
-    url, quality = parse_launch_url()
+    url, quality, is_minimized = parse_launch_url()
     if url:
         # If CDM is already running on port 19876, forward to it and exit!
         try:
@@ -3096,7 +3118,7 @@ def main():
         except Exception:
             pass
     try:
-        launch_gui(initial_url=url, initial_quality=quality)
+        launch_gui(initial_url=url, initial_quality=quality, minimized=is_minimized)
     except ImportError as e:
         print(f"Tkinter not found: {e}\nInstall Python with tkinter support.")
         sys.exit(1)

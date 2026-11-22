@@ -98,6 +98,9 @@ Root: HKCU; Subkey: "Software\Classes\cdm\shell\open\command"; ValueType: string
 ; Product Key & License Registry
 Root: HKCU; Subkey: "Software\CDM"; Flags: uninsdeletekey
 
+; Auto-start on Windows boot (minimized to background like IDM)
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "CDM"; ValueData: """{app}\{#AppExeName}"" --minimized"; Flags: uninsdeletevalue
+
 ; Chrome Extension
 Root: HKCU; Subkey: "Software\Google\Chrome\Extensions\cdm_download_manager"; ValueType: string; ValueName: "path"; ValueData: "{app}\browser_extension\chrome"; Flags: uninsdeletekey; Tasks: chrome_ext
 
