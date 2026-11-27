@@ -50,7 +50,7 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.3"
+VERSION         = "2.3.4"
 BUILD_DATE      = "2026-11-28"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
@@ -767,13 +767,15 @@ class DownloadTask:
 class YtDlpTask:
     """Wraps yt-dlp for video and audio streaming downloads (YouTube, Facebook, TikTok, etc.)."""
     def __init__(self, url, save_dir, quality="best", fmt="mp4",
-                 audio_only=False, proxy="", filename=""):
+                 audio_only=False, proxy="", filename="", referer="", browser=""):
         self.url            = url.strip()
         self.save_dir       = save_dir
         self.quality        = quality
         self.fmt            = fmt or "mp4"
         self.audio_only     = audio_only
         self.proxy          = proxy
+        self.referer        = referer or ""
+        self.browser        = browser if browser in {"chrome", "edge", "firefox", "brave", "opera", "vivaldi"} else ""
         self.status         = "queued"
         self.filename       = filename or ""
         self.filepath       = ""
@@ -853,6 +855,15 @@ class YtDlpTask:
             "--encoding", "utf-8",
         ]
 
+        host = (urllib.parse.urlparse(self.url).hostname or "").lower()
+        if host == "facebook.com" or host.endswith(".facebook.com") or host == "fb.watch" or host.endswith(".fb.watch"):
+            # Facebook often serves a login wall instead of the requested reel.
+            # yt-dlp reads these cookies locally and sends them to Facebook.
+            if self.browser:
+                cmd += ["--cookies-from-browser", self.browser]
+            if self.referer:
+                cmd += ["--referer", self.referer]
+
         if self.audio_only or str(self.fmt).lower() == "mp3":
             cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
         else:
@@ -928,12 +939,16 @@ class YtDlpTask:
                 errors="replace"
             )
 
+            recent_output = []
             for line in self._proc.stdout:
                 if self._stop_ev.is_set():
                     break
                 line = line.strip()
                 if not line:
                     continue
+                if not line.startswith(("PROG:", "METADATA:", "FINAL:")):
+                    recent_output.append(line)
+                    del recent_output[:-8]
 
                 if line.startswith("METADATA:"):
                     parts = line[9:].split("|")
@@ -1003,7 +1018,10 @@ class YtDlpTask:
                     self.on_complete(self)
             else:
                 self.status = "error"
-                self.error_msg = "yt-dlp exited with error"
+                details = next((s for s in reversed(recent_output) if s.startswith("ERROR:")), "")
+                if not details and recent_output:
+                    details = recent_output[-1]
+                self.error_msg = details or f"yt-dlp exited with error (code {self._proc.returncode})"
         except Exception as e:
             self.status = "error"
             self.error_msg = str(e)
@@ -1100,8 +1118,9 @@ class ExtensionServer:
                         ref  = data.get("referer","")
                         quality = data.get("quality","best")
                         autostart = data.get("autostart", True)
+                        browser = data.get("browser", "")
                         if url and parent.on_url:
-                            parent.on_url(url, ref, quality, autostart)
+                            parent.on_url(url, ref, quality, autostart, browser)
                     except Exception: pass
                     self.send_response(200)
                     self._cors()
@@ -1392,7 +1411,7 @@ class IDMDownloadStatusDialog:
             "paused": "Paused",
             "stopped": "Stopped",
             "completed": "Complete",
-            "error": f"Error: {task.error_msg[:30]}"
+            "error": f"Error: {task.error_msg[:90]}"
         }.get(task.status, task.status)
         self.val_status.configure(text=status_text, fg="#008800" if task.status=="completed" else ("#0055aa" if task.status=="downloading" else "#cc0000"))
 
@@ -1878,13 +1897,13 @@ def launch_gui(initial_url=None, initial_quality=None, minimized=False):
         refresh_detail()
 
     def add_task(url, filename=None, autostart=True, referer="", is_ytdlp=False,
-                 quality="best", fmt="mp4", audio_only=False):
+                 quality="best", fmt="mp4", audio_only=False, browser=""):
         if is_ytdlp or is_video_stream_url(url):
             task = YtDlpTask(url, settings["download_dir"],
                              quality=quality or settings.get("yt_quality", "best"),
                              fmt=fmt or settings.get("yt_format", "mp4"),
                              audio_only=audio_only,
-                             proxy=settings.get("proxy",""))
+                             proxy=settings.get("proxy",""), referer=referer, browser=browser)
         else:
             task = DownloadTask(url, settings["download_dir"],
                                 connections=settings.get("connections",8),
@@ -2945,7 +2964,7 @@ del "%~f0" >nul 2>&1
     # BROWSER EXTENSION SERVER (PORT 19876)
     # ══════════════════════════════════════════════════════════════════════════
     ext_server = ExtensionServer(EXT_PORT)
-    def on_ext_url(url, referer="", quality="best", autostart=True):
+    def on_ext_url(url, referer="", quality="best", autostart=True, browser=""):
         def _handle():
             try:
                 root.deiconify()
@@ -2960,7 +2979,7 @@ del "%~f0" >nul 2>&1
                 audio_only = str(q).lower() == "audio"
                 fmt = "mp3" if audio_only else settings.get("yt_format", "mp4")
                 add_task(url, autostart=True, referer=referer, is_ytdlp=True,
-                         quality=q, fmt=fmt, audio_only=audio_only)
+                         quality=q, fmt=fmt, audio_only=audio_only, browser=browser)
             else:
                 add_task(url, autostart=True, referer=referer)
 

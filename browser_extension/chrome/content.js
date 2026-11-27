@@ -12,6 +12,13 @@
     return location.hostname.includes('facebook.com') || location.hostname.includes('fb.watch');
   }
 
+  function currentBrowser() {
+    const ua = navigator.userAgent;
+    if (/Firefox\//.test(ua)) return 'firefox';
+    if (/Edg\//.test(ua)) return 'edge';
+    return 'chrome';
+  }
+
   const QUALITIES = [
     { id: 'best', label: '🌟 Best Quality (Auto)' },
     { id: '1080p', label: '🎬 1080p (Full HD)' },
@@ -46,7 +53,8 @@
       type: 'SEND_URL',
       url: targetUrl,
       referer: location.href,
-      quality: quality
+      quality: quality,
+      browser: currentBrowser()
     }, (res) => {
       if (chrome.runtime.lastError || !res || !res.ok) {
         statusBtn.innerHTML = `<span>⚠ CDM is not connected</span>`;

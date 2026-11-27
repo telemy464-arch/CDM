@@ -77,7 +77,7 @@ function getExt(url) {
   } catch { return ''; }
 }
 
-function sendToCDM(url, referer, quality) {
+function sendToCDM(url, referer, quality, browser) {
   return fetch(CDM_HOST + "/add", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -85,6 +85,7 @@ function sendToCDM(url, referer, quality) {
       url,
       referer: referer || "",
       quality: quality || "best",
+      browser: browser || "",
       autostart: true
     })
   }).then(r => {
@@ -102,7 +103,7 @@ rt.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return false;
   }
   if (msg.type === "SEND_URL") {
-    sendToCDM(msg.url, msg.referer, msg.quality)
+    sendToCDM(msg.url, msg.referer, msg.quality, msg.browser)
       .then(data => {
         sendResponse({ ok: true, data });
       })

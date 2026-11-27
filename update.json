@@ -1,16 +1,15 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "release_date": "2026-11-28",
-  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.3.exe",
+  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.4.exe",
   "changelog": [
-    "Fixed browser audio-only downloads to extract MP3 correctly",
-    "Browser extension passes selected video quality to CDM for 4K, 2K, 1080p, 720p and 480p downloads",
-    "Added quality selection and refreshed popup UI in Chrome and Firefox extensions",
-    "Extension reports when CDM is disconnected instead of claiming the download was sent"
+    "Facebook reel downloads now use browser session cookies from the browser that initiated the download",
+    "Download errors now show the actual yt-dlp details instead of a generic message",
+    "Preserved browser video quality selection and MP3 extraction fixes"
   ],
   "mandatory": true,
-  "sha256": "193bc938a02656dcc6e778217f63fba4bb6311015c7f9c5dcd98af598f95c205",
-  "size_bytes": 16872622,
+  "sha256": "c0944b7c768e402170a35bd49f2d9acdbbb81613065da29e3645d2ac5cc62519",
+  "size_bytes": 16873807,
   "min_os": "Windows 10 / 11"
 }
