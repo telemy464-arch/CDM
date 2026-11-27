@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "CDM - Cloud Download Manager Helper",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "description": "Automatically send downloads to CDM (Cloud Download Manager)",
   "permissions": [
     "downloads", "contextMenus", "tabs", "activeTab",

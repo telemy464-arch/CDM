@@ -42,37 +42,21 @@
     statusBtn.style.background = '#ffc107';
     statusBtn.style.color = '#000000';
 
-    const rt = (typeof browser !== 'undefined' ? browser : chrome);
-
-    rt.runtime.sendMessage({
+    chrome.runtime.sendMessage({
       type: 'SEND_URL',
       url: targetUrl,
       referer: location.href,
       quality: quality
     }, (res) => {
-      if (rt.runtime.lastError || !res || !res.ok) {
-        statusBtn.innerHTML = `<span>🚀 Launching CDM...</span>`;
-        statusBtn.style.background = '#0dcaf0';
-        statusBtn.style.color = '#000000';
-
-        try {
-          const a = document.createElement('a');
-          a.href = `cdm://add?url=${encodeURIComponent(targetUrl)}&quality=${encodeURIComponent(quality)}`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        } catch (e) {}
-
+      if (chrome.runtime.lastError || !res || !res.ok) {
+        statusBtn.innerHTML = `<span>⚠ CDM is not connected</span>`;
+        statusBtn.style.background = '#b42318';
+        statusBtn.style.color = '#ffffff';
         setTimeout(() => {
-          statusBtn.innerHTML = `<span>⚡ Sent to CDM!</span>`;
-          statusBtn.style.background = '#198754';
+          statusBtn.innerHTML = originalHtml;
+          statusBtn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
           statusBtn.style.color = '#ffffff';
-          setTimeout(() => {
-            statusBtn.innerHTML = originalHtml;
-            statusBtn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
-            statusBtn.style.color = '#ffffff';
-          }, 2500);
-        }, 1200);
+        }, 3000);
       } else {
         statusBtn.innerHTML = `<span>⚡ Downloading in CDM!</span>`;
         statusBtn.style.background = '#198754';
@@ -87,6 +71,7 @@
     });
   }
 
+  // Create IDM-style floating download widget
   function createDownloadButton(videoEl) {
     if (videoEl.dataset.cdmAttached) return;
     videoEl.dataset.cdmAttached = 'true';
@@ -111,6 +96,7 @@
       opacity: 0.95;
     `;
 
+    // Main download button
     const mainBtn = document.createElement('div');
     mainBtn.style.cssText = `
       display: flex;
@@ -132,6 +118,7 @@
       </div>
     `;
 
+    // Dropdown arrow button
     const arrowBtn = document.createElement('div');
     arrowBtn.style.cssText = `
       display: flex;
@@ -149,6 +136,7 @@
     arrowBtn.title = "Select video quality/resolution";
     arrowBtn.innerHTML = `▼`;
 
+    // Quality dropdown menu
     const menu = document.createElement('div');
     menu.style.cssText = `
       position: absolute;
@@ -210,12 +198,14 @@
       menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
     };
 
+    // Close menu when clicking outside
     document.addEventListener('click', (e) => {
       if (!widget.contains(e.target)) {
         menu.style.display = 'none';
       }
     });
 
+    // Attach to video container
     let container = videoEl.parentElement;
     if (isYouTube()) {
       container = document.querySelector('#movie_player') || document.querySelector('.html5-video-player') || container;
@@ -229,6 +219,7 @@
     }
   }
 
+  // Scan and attach to all videos
   function attachVideoButtons() {
     const videos = document.querySelectorAll('video');
     videos.forEach(v => {
@@ -238,6 +229,7 @@
     });
   }
 
+  // Monitor DOM changes for dynamic video loading (like YouTube SPA navigations)
   attachVideoButtons();
   const observer = new MutationObserver(() => {
     attachVideoButtons();
@@ -247,6 +239,7 @@
     subtree: true
   });
 
+  // Re-check on URL change (YouTube SPA)
   let lastUrl = location.href;
   setInterval(() => {
     if (location.href !== lastUrl) {

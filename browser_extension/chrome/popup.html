@@ -5,26 +5,21 @@
 <title>CDM - Cloud Download Manager</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    width:300px; min-height:220px;
-    font-family:'Segoe UI',sans-serif;
-    background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);
-    color:#e0e0e0;
-  }
+  body { width:320px; min-height:250px; font-family:'Segoe UI',sans-serif; background:#0b1220; color:#e8eefc; }
   .header {
-    background:linear-gradient(90deg,#e94560,#533483);
-    padding:14px 16px;
+    background:linear-gradient(120deg,#172554,#1e3a8a 58%,#6d28d9);
+    padding:16px 18px;
     display:flex; align-items:center; gap:10px;
   }
-  .header h1 { font-size:15px; font-weight:700; }
+  .header h1 { font-size:16px; font-weight:700; letter-spacing:.2px; }
   .header .version { font-size:10px; opacity:0.8; margin-top:2px; }
   .body { padding:16px; }
   .toggle-row {
     display:flex; align-items:center; justify-content:space-between;
-    background:#0f3460; border-radius:10px; padding:12px 14px; margin-bottom:12px;
+    background:#111d32; border:1px solid #243653; border-radius:12px; padding:12px 14px; margin-bottom:14px;
   }
   .toggle-label { font-size:13px; }
-  .toggle-sub { font-size:10px; color:#888; margin-top:2px; }
+  .toggle-sub { font-size:10px; color:#91a2bd; margin-top:2px; }
   .switch { position:relative; width:44px; height:24px; }
   .switch input { opacity:0; width:0; height:0; }
   .slider {
@@ -41,13 +36,14 @@
   .url-row { margin-bottom:10px; }
   .url-input {
     width:100%; padding:8px 10px; border-radius:7px;
-    background:#0f1b35; border:1px solid #1e3a5f;
-    color:#e0e0e0; font-size:12px; outline:none;
+    background:#0f1b2e; border:1px solid #2a3c59;
+    color:#e0e0e0; font-size:12px; outline:none; height:36px;
   }
   .url-input::placeholder { color:#555; }
+  .quality { width:100%; height:34px; margin:0 0 10px; padding:0 10px; border-radius:7px; background:#0f1b2e; border:1px solid #2a3c59; color:#dce7fb; font-size:12px; }
   .btn-dl {
     width:100%; padding:10px; border:none; border-radius:8px;
-    background:linear-gradient(90deg,#e94560,#533483);
+    background:linear-gradient(100deg,#2563eb,#7c3aed);
     color:#fff; font-size:13px; font-weight:700;
     cursor:pointer; transition:.2s;
     margin-bottom:8px;
@@ -60,7 +56,7 @@
   .status.ok { color:#00c851; }
   .status.err { color:#ff4444; }
   .footer {
-    padding:8px 16px; border-top:1px solid #1e3a5f;
+    padding:9px 16px; border-top:1px solid #1e2b41;
     display:flex; justify-content:space-between; align-items:center;
   }
   .footer span { font-size:10px; color:#555; }
@@ -72,7 +68,7 @@
 <div class="header">
   <div>
     <h1>☁️ CDM</h1>
-    <div class="version">v2.0 — Cloud Download Manager</div>
+    <div class="version">Browser companion · v2.3.2</div>
   </div>
 </div>
 
@@ -91,6 +87,7 @@
   <div class="url-row">
     <input class="url-input" type="text" id="urlInput" placeholder="Paste URL here...">
   </div>
+  <select class="quality" id="quality"><option value="best">Video quality · Best available</option><option value="4k">4K · up to 2160p</option><option value="2k">2K · up to 1440p</option><option value="1080p">1080p</option><option value="720p">720p</option><option value="480p">480p</option><option value="audio">Audio only · MP3</option></select>
 
   <button class="btn-dl" id="btnDl">⬇  Download with CDM</button>
   <div class="status" id="status">CDM app must be running</div>

@@ -50,8 +50,8 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.2"
-BUILD_DATE      = "2026-11-23"
+VERSION         = "2.3.3"
+BUILD_DATE      = "2026-11-28"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
 WHATSAPP_NUMBER = "8801810936126"
@@ -867,7 +867,10 @@ class YtDlpTask:
                 "audio": "bestaudio/best"
             }
             fmt_str = q_map.get(str(self.quality).lower(), "bestvideo+bestaudio/best")
-            cmd += ["-f", fmt_str, "--merge-output-format", self.fmt]
+            if str(self.quality).lower() == "audio":
+                cmd += ["-f", fmt_str]
+            else:
+                cmd += ["-f", fmt_str, "--merge-output-format", self.fmt]
 
         # Locate ffmpeg for audio/video stream merging
         ffmpeg_loc = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
@@ -2954,8 +2957,10 @@ del "%~f0" >nul 2>&1
 
             if is_video_stream_url(url):
                 q = quality or settings.get("yt_quality", "best")
-                fmt = settings.get("yt_format", "mp4")
-                add_task(url, autostart=True, referer=referer, is_ytdlp=True, quality=q, fmt=fmt)
+                audio_only = str(q).lower() == "audio"
+                fmt = "mp3" if audio_only else settings.get("yt_format", "mp4")
+                add_task(url, autostart=True, referer=referer, is_ytdlp=True,
+                         quality=q, fmt=fmt, audio_only=audio_only)
             else:
                 add_task(url, autostart=True, referer=referer)
 

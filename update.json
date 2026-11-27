@@ -1,27 +1,16 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.3.2",
-  "release_date": "2026-11-23",
-  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.0.exe",
+  "version": "2.3.3",
+  "release_date": "2026-11-28",
+  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.3.exe",
   "changelog": [
-    "⚡ Instant 1-Click Video Download: clicking 'Download Video' in browser starts download immediately without extra clicks",
-    "🎬 Added IDM-style resolution dropdown directly in YouTube player (4K, 2K, 1080p, 720p, 480p, MP3)",
-    "🔗 Registered custom 'cdm://' protocol: automatically wakes up and launches CDM if closed",
-    "⚠️ Real-time extension status feedback (alerts if CDM is closed instead of falsely saying sent)",
-    "🎬 Fixed YouTube, Facebook, TikTok & stream video downloading: real video files (MP4/MKV) downloaded directly, no HTML links",
-    "⚡ Silent yt-dlp execution without command prompt black window",
-    "📊 Accurate video progress & file size tracking in download status dialog (never shows 0 B)",
-    "⏹ Automatic dialog close option upon download completion (no stacking windows)",
-    "📂 Integrated Open & Open Folder directly from completion dialog",
-    "📱 Direct WhatsApp product key registration integration (01810936126)",
-    "📊 Re-engineered Modern Analytics Dashboard with KPI cards & category progress",
-    "🖥️ Sleek, compact & centered window sizing (860x500 responsive)",
-    "✨ Full IDM-style user interface & layout redesign",
-    "⏱ Accurate real-time 3-day free trial countdown",
-    "🚀 Seamless zero-click automatic force update"
+    "Fixed browser audio-only downloads to extract MP3 correctly",
+    "Browser extension passes selected video quality to CDM for 4K, 2K, 1080p, 720p and 480p downloads",
+    "Added quality selection and refreshed popup UI in Chrome and Firefox extensions",
+    "Extension reports when CDM is disconnected instead of claiming the download was sent"
   ],
   "mandatory": true,
-  "sha256": "8f273e3e5baf40587b9595e20b967e5623bfa3e2c56a7062ec8539d8807e4e2d",
-  "size_bytes": 15843673,
+  "sha256": "193bc938a02656dcc6e778217f63fba4bb6311015c7f9c5dcd98af598f95c205",
+  "size_bytes": 16872622,
   "min_os": "Windows 10 / 11"
 }

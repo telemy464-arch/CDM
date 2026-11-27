@@ -49,29 +49,14 @@
       quality: quality
     }, (res) => {
       if (chrome.runtime.lastError || !res || !res.ok) {
-        statusBtn.innerHTML = `<span>🚀 Launching CDM...</span>`;
-        statusBtn.style.background = '#0dcaf0';
-        statusBtn.style.color = '#000000';
-
-        // Wake up CDM via custom protocol
-        try {
-          const a = document.createElement('a');
-          a.href = `cdm://add?url=${encodeURIComponent(targetUrl)}&quality=${encodeURIComponent(quality)}`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        } catch (e) {}
-
+        statusBtn.innerHTML = `<span>⚠ CDM is not connected</span>`;
+        statusBtn.style.background = '#b42318';
+        statusBtn.style.color = '#ffffff';
         setTimeout(() => {
-          statusBtn.innerHTML = `<span>⚡ Sent to CDM!</span>`;
-          statusBtn.style.background = '#198754';
+          statusBtn.innerHTML = originalHtml;
+          statusBtn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
           statusBtn.style.color = '#ffffff';
-          setTimeout(() => {
-            statusBtn.innerHTML = originalHtml;
-            statusBtn.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
-            statusBtn.style.color = '#ffffff';
-          }, 2500);
-        }, 1200);
+        }, 3000);
       } else {
         statusBtn.innerHTML = `<span>⚡ Downloading in CDM!</span>`;
         statusBtn.style.background = '#198754';

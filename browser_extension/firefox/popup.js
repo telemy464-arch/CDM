@@ -5,6 +5,7 @@ const urlInput  = document.getElementById('urlInput');
 const btnDl     = document.getElementById('btnDl');
 const statusEl  = document.getElementById('status');
 const connDot   = document.getElementById('connDot');
+const quality   = document.getElementById('quality');
 
 const rt = typeof chrome !== 'undefined' ? chrome : browser;
 
@@ -31,8 +32,13 @@ toggleExt.addEventListener('change', () => {
 btnDl.addEventListener('click', () => {
   const url = urlInput.value.trim();
   if (!url) { statusEl.textContent = 'Please enter a URL'; return; }
-  rt.runtime.sendMessage({ type: 'SEND_URL', url, referer: '' }, () => {
-    statusEl.textContent = 'Sent to CDM ✓';
+  rt.runtime.sendMessage({ type: 'SEND_URL', url, referer: '', quality: quality.value }, (res) => {
+    if (rt.runtime.lastError || !res || !res.ok) {
+      statusEl.textContent = 'Could not send — is CDM running?';
+      statusEl.className = 'status err';
+      return;
+    }
+    statusEl.textContent = 'Added to CDM ✓';
     statusEl.className = 'status ok';
     urlInput.value = '';
   });
