@@ -50,7 +50,7 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.7"
+VERSION         = "2.3.8"
 BUILD_DATE      = "2026-11-28"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
@@ -2677,7 +2677,13 @@ def launch_gui(initial_url=None, initial_quality=None, minimized=False):
         def _check_worker():
             try:
                 up_url = settings.get("update_url", "https://raw.githubusercontent.com/telemy464-arch/CDM/main/update.json")
-                req = urllib.request.Request(up_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CDM-Updater/2.0"})
+                separator = "&" if "?" in up_url else "?"
+                up_url = f"{up_url}{separator}cdm_check={int(time.time())}"
+                req = urllib.request.Request(up_url, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CDM-Updater/2.0",
+                    "Cache-Control": "no-cache, no-store",
+                    "Pragma": "no-cache",
+                })
                 try:
                     ctx = ssl.create_default_context()
                     resp = urllib.request.urlopen(req, timeout=8, context=ctx)
@@ -3148,8 +3154,8 @@ del "%~f0" >nul 2>&1
         root.lift()
     if not trial.is_valid:
         root.after(200, lambda: activate_dialog(mandatory=True))
-    if settings.get("auto_update_check", True):
-        root.after(3000, lambda: check_updates(manual=False))
+    # Always check at startup so a disabled optional-check setting cannot hide a mandatory release.
+    root.after(3000, lambda: check_updates(manual=False, on_startup=True))
 
     # ══════════════════════════════════════════════════════════════════════════
     # MAIN REFRESH LOOP

@@ -4,7 +4,7 @@
 ; ═══════════════════════════════════════════════════════════════════════
 
 #define AppName      "CDM - Cloud Download Manager"
-#define AppVersion   "2.3.7"
+#define AppVersion   "2.3.8"
 #define AppPublisher "CDM Technology"
 #define AppURL       "https://github.com/telemy464-arch/CDM"
 #define AppExeName   "CDM.exe"
@@ -25,7 +25,7 @@ AllowNoIcons=yes
 LicenseFile=
 SourceDir=..
 OutputDir=installer\output
-OutputBaseFilename=CDM_Setup_v2.3.7
+OutputBaseFilename=CDM_Setup_v2.3.8
 SetupIconFile=assets\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -56,7 +56,7 @@ Name: "assoc_torrent";   Description: "Associate .torrent files with CDM"; Group
 
 [Files]
 ; Main executable
-Source: "dist\CDM_2.3.7.exe"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
+Source: "dist\CDM_2.3.8.exe"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
 
 ; Browser extension
 Source: "browser_extension\chrome\*"; DestDir: "{app}\browser_extension\chrome"; Flags: ignoreversion recursesubdirs createallsubdirs
