@@ -50,7 +50,7 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.6"
+VERSION         = "2.3.7"
 BUILD_DATE      = "2026-11-28"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
@@ -625,12 +625,18 @@ class DownloadTask:
                     supports_range = resp.status == 206
             except Exception: pass
         self.size = size; self.supports_range = supports_range
-        if size and supports_range:
-            try:
-                probe = urllib.request.Request(self.url, headers={**headers,"Range":"bytes=0-0"})
-                with opener.open(probe, timeout=10) as resp:
-                    if resp.status != 206: self.supports_range = False
-            except Exception: pass
+        # Some servers support byte ranges without advertising Accept-Ranges.
+        # Probe the actual behavior so resumable downloads work when possible.
+        try:
+            probe = urllib.request.Request(self.url, headers={**headers,"Range":"bytes=0-0"})
+            with opener.open(probe, timeout=10) as resp:
+                self.supports_range = (resp.status == 206)
+                cr = resp.headers.get("Content-Range") or ""
+                if self.supports_range and "/" in cr:
+                    try: size = int(cr.rsplit("/",1)[1])
+                    except ValueError: pass
+        except Exception:
+            self.supports_range = False
         os.makedirs(self.parts_dir, exist_ok=True)
         if size and self.supports_range and size > 1024*1024:
             n = min(self.connections, max(1, size//(512*1024)))
@@ -670,6 +676,21 @@ class DownloadTask:
 
     def resume(self):
         if self.status in ("paused","error","stopped"):
+            # Without byte-range support, append-resume would corrupt the file.
+            # Restart that single stream cleanly instead.
+            restarted = False
+            for part in self.parts:
+                if not part.get("range") and part.get("done", 0):
+                    try:
+                        with open(part["path"], "wb"):
+                            pass
+                    except OSError:
+                        pass
+                    part["done"] = 0
+                    part["finished"] = False
+                    restarted = True
+            if restarted:
+                self.downloaded = sum(p.get("done", 0) for p in self.parts)
             self.error_msg = ""; self.start()
 
     def stop(self):
@@ -807,9 +828,20 @@ class YtDlpTask:
         self._lock          = threading.Lock()
         self.on_complete    = None
         self._stop_ev       = threading.Event()
+        self._pause_ev      = threading.Event()
+        self._run_lock      = threading.Lock()
 
     def start(self):
-        threading.Thread(target=self._run, daemon=True).start()
+        with self._run_lock:
+            if self.status in ("downloading", "merging", "pausing", "stopping", "completed"):
+                return
+            self._stop_ev.clear()
+            self._pause_ev.clear()
+            self.error_msg = ""
+            self._speed_sample_bytes = self.downloaded
+            self._speed_sample_at = time.monotonic()
+            self.status = "downloading"
+            threading.Thread(target=self._run, daemon=True).start()
 
     def stop(self):
         self._stop_ev.set()
@@ -821,12 +853,19 @@ class YtDlpTask:
         self.status = "stopped"
 
     def pause(self):
-        self.stop()
+        if self.status not in ("downloading", "merging"):
+            return
+        self._pause_ev.set()
+        self.status = "pausing"
+        if self._proc:
+            try:
+                self._proc.terminate()
+            except Exception:
+                pass
 
     def resume(self):
-        self._stop_ev.clear()
-        self.status = "queued"
-        self.start()
+        if self.status in ("paused", "stopped", "error", "queued"):
+            self.start()
 
     def _run(self):
         self.status = "downloading"
@@ -866,6 +905,7 @@ class YtDlpTask:
             "--no-playlist",
             "--newline",
             "--no-mtime",
+            "--continue",
             "--no-colors",
             "--encoding", "utf-8",
             "--progress",
@@ -947,6 +987,9 @@ class YtDlpTask:
             startupinfo.wShowWindow = subprocess.SW_HIDE
 
         try:
+            if self._stop_ev.is_set() or self._pause_ev.is_set():
+                self.status = "stopped" if self._stop_ev.is_set() else "paused"
+                return
             self._proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -959,9 +1002,12 @@ class YtDlpTask:
                 errors="replace"
             )
 
+            if self._stop_ev.is_set() or self._pause_ev.is_set():
+                try: self._proc.terminate()
+                except Exception: pass
             recent_output = []
             for line in self._proc.stdout:
-                if self._stop_ev.is_set():
+                if self._stop_ev.is_set() or self._pause_ev.is_set():
                     break
                 line = line.strip()
                 if not line:
@@ -978,10 +1024,8 @@ class YtDlpTask:
                             ext_clean = parts[2].strip() if len(parts) > 2 and parts[2].strip() else self.fmt
                             self.filename = f"{title_clean}.{ext_clean}"
                             self.filepath = os.path.join(save_folder, self.filename)
-                        if len(parts) > 1 and parts[1].strip().isdigit():
-                            sz_val = int(parts[1].strip())
-                            if sz_val > 0:
-                                self.size = sz_val
+                        # Metadata sizes can describe only one adaptive stream (e.g. 712 B).
+                        # Use live per-stream totals as the progress denominator instead.
                     except Exception:
                         pass
                 elif line.startswith("PROG:"):
@@ -994,14 +1038,16 @@ class YtDlpTask:
                         if len(parts) >= 2 and parts[1].strip().isdigit():
                             tot = int(parts[1].strip())
                             if tot > 0:
-                                self._stream_sizes[stream_key] = tot
-                                self.size = sum(self._stream_sizes.values())
-                        if len(parts) >= 3:
+                                current = self._stream_downloaded.get(stream_key, 0)
+                                if tot >= current:
+                                    self._stream_sizes[stream_key] = tot
+                                self.size = sum(self._stream_sizes.values()) or None
+                        if self.size and self.downloaded:
+                            self.progress = min(0.999, max(0.0, self.downloaded / self.size))
+                        elif len(parts) >= 3:
                             pct_clean = re.sub(r'[^\d.]', '', parts[2])
                             if pct_clean:
-                                self.progress = float(pct_clean) / 100.0
-                        if self.size and self.downloaded:
-                            self.progress = min(1.0, max(0.0, self.downloaded / self.size))
+                                self.progress = min(0.999, max(0.0, float(pct_clean) / 100.0))
                         now = time.monotonic()
                         elapsed = now - self._speed_sample_at
                         if elapsed >= 0.25:
@@ -1021,6 +1067,10 @@ class YtDlpTask:
                         self.filename = os.path.basename(fin)
 
             self._proc.wait()
+            if self._pause_ev.is_set() or self._stop_ev.is_set():
+                self.status = "stopped" if self._stop_ev.is_set() else "paused"
+                self._speed = 0.0
+                return
             if self._proc.returncode == 0:
                 self.status = "completed"
                 self.progress = 1.0
@@ -1051,9 +1101,13 @@ class YtDlpTask:
                     details = recent_output[-1]
                 self.error_msg = details or f"yt-dlp exited with error (code {self._proc.returncode})"
         except Exception as e:
-            self.status = "error"
-            self.error_msg = str(e)
+            if self._pause_ev.is_set() or self._stop_ev.is_set():
+                self.status = "stopped" if self._stop_ev.is_set() else "paused"
+            else:
+                self.status = "error"
+                self.error_msg = str(e)
         finally:
+            self._proc = None
             if cookie_file:
                 try: os.remove(cookie_file)
                 except OSError: pass
@@ -1415,12 +1469,15 @@ class IDMDownloadStatusDialog:
             self.win.geometry(f"{self.win.winfo_width()}x340")
 
     def _pause_toggle(self):
-        if self.task.status == "downloading":
+        if self.task.status in ("downloading", "merging"):
             self.task.pause()
             self.btn_pause.configure(text="Resume")
-        else:
-            self.task.start()
+        elif self.task.status in ("paused", "stopped", "error", "queued"):
+            resume = getattr(self.task, "resume", None)
+            (resume or self.task.start)()
             self.btn_pause.configure(text="Pause")
+        else:
+            return
 
     def _cancel(self):
         self.task.stop()
@@ -1472,10 +1529,15 @@ class IDMDownloadStatusDialog:
         title_fname = getattr(task, "filename", "") or "download"
         raw_pct = getattr(task, "progress", 0.0) or 0.0
         pct_val = raw_pct * 100 if raw_pct else (task.downloaded / task.size * 100 if getattr(task, "size", None) else 0.0)
+        if task.status in ("downloading", "merging", "pausing"):
+            pct_val = min(99.9, pct_val)
         self.win.title(f"{int(pct_val)}% {title_fname}")
 
         status_text = {
             "downloading": f"Receiving data... {pct_val:.1f}%",
+            "merging": "Finalizing video...",
+            "pausing": "Pausing...",
+            "stopping": "Stopping...",
             "queued": "Queued",
             "paused": "Paused",
             "stopped": "Stopped",
@@ -1484,14 +1546,15 @@ class IDMDownloadStatusDialog:
         }.get(task.status, task.status)
         self.val_status.configure(text=status_text, fg="#008800" if task.status=="completed" else ("#0055aa" if task.status=="downloading" else "#cc0000"))
 
-        size_str = f"{human_size(task.size)} ({task.size:,} bytes)" if getattr(task, "size", None) else human_size(task.downloaded)
+        size_str = f"{human_size(task.size)} ({task.size:,} bytes)" if getattr(task, "size", None) else ("Estimating…" if isinstance(task, YtDlpTask) else human_size(task.downloaded))
         self.val_size.configure(text=size_str)
 
         dl_str = f"{human_size(task.downloaded)} ({pct_val:.2f} %)"
         self.val_dl.configure(text=dl_str)
 
-        spd = task_speed(task) if task.status == "downloading" else 0
-        self.val_speed.configure(text=human_speed_mbps(spd) if task.status == "downloading" else "0 B/s (0.00 Mbps)")
+        active = task.status == "downloading"
+        spd = task_speed(task) if active else 0
+        self.val_speed.configure(text=human_speed_mbps(spd) if active else "0 B/s (0.00 Mbps)")
 
         eta_s = format_eta((task.size - task.downloaded) / max(1, spd)) if (getattr(task, "size", None) and task.status == "downloading" and spd > 0) else "—"
         self.val_eta.configure(text=eta_s)
@@ -1503,7 +1566,7 @@ class IDMDownloadStatusDialog:
         if self._show_details:
             self._draw_chunk_canvas()
 
-        if task.status == "downloading":
+        if task.status in ("downloading", "merging", "pausing", "stopping"):
             self.btn_pause.configure(text="Pause", state="normal")
         elif task.status in ("paused", "stopped"):
             self.btn_pause.configure(text="Resume", state="normal")
@@ -1935,7 +1998,8 @@ def launch_gui(initial_url=None, initial_quality=None, minimized=False):
     def do_start_queue():
         for t2 in tasks:
             if t2.status in ("queued", "paused", "stopped"):
-                t2.start()
+                resume = getattr(t2, "resume", None)
+                (resume or t2.start)()
 
     def do_stop_queue():
         for t2 in tasks:
@@ -2933,15 +2997,16 @@ del "%~f0" >nul 2>&1
             elif cat_f == "cat_Music":      show = (getattr(task, "category", "") == "Music")
             elif cat_f == "cat_Programs":   show = (getattr(task, "category", "") == "Programs")
             elif cat_f == "cat_Video":      show = (getattr(task, "category", "") == "Video")
-            elif cat_f == "unfinished":     show = (task.status in ("downloading", "queued", "paused", "stopped"))
+            elif cat_f == "unfinished":     show = (task.status in ("downloading", "merging", "pausing", "queued", "paused", "stopped"))
             elif cat_f == "finished":       show = (task.status == "completed")
             elif cat_f == "queues":         show = (task.status == "queued")
             elif cat_f == "grabber":        show = ("grabber" in getattr(task, "source", ""))
 
             if show:
                 raw_pct = getattr(task, "progress", 0.0) or 0.0
-                pct = f"{raw_pct*100:.1f}%" if getattr(task, "size", None) else ("—" if isinstance(task, DownloadTask) else f"{int(raw_pct*100)}%")
-                size_s = human_size(task.size) if getattr(task, "size", None) else human_size(task.downloaded)
+                pct_value = min(99.9, raw_pct * 100) if task.status in ("downloading", "merging", "pausing") else raw_pct * 100
+                pct = f"{pct_value:.1f}%" if getattr(task, "size", None) else ("—" if isinstance(task, DownloadTask) else f"{int(pct_value)}%")
+                size_s = human_size(task.size) if getattr(task, "size", None) else ("Estimating…" if isinstance(task, YtDlpTask) else human_size(task.downloaded))
                 spd = task_speed(task) if task.status == "downloading" else 0
                 eta = format_eta((task.size - task.downloaded) / max(1, spd)) if (getattr(task, "size", None) and task.status == "downloading" and spd > 0) else "—"
                 speed_s = human_speed_mbps(spd) if task.status == "downloading" else "—"

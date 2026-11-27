@@ -1,16 +1,16 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.3.6",
+  "version": "2.3.7",
   "release_date": "2026-11-28",
-  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.6.exe",
+  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.7.exe",
   "changelog": [
-    "yt-dlp live progress is explicitly enabled and refreshed every 250 ms",
-    "Downloaded bytes and video/audio stream totals update during transfers",
-    "Transfer rate is measured from downloaded byte deltas and shown in MB/s and Mbps",
-    "Fragmented videos use up to eight concurrent fragments for faster transfers"
+    "Fixed false 100% progress caused by small adaptive-stream metadata sizes",
+    "Pause now preserves yt-dlp partial files and resume refreshes expiring page stream URLs",
+    "Direct downloads probe HTTP range support and resume safely when supported",
+    "Live progress stays below 100% until the output file is finalized"
   ],
   "mandatory": true,
-  "sha256": "bf728d6234cfb0d1a85fccf98896cd485f6d740e33cd2f84c360d4dc40a88ca5",
-  "size_bytes": 16875596,
+  "sha256": "b6644f73694c1628d8d590bc5cf51758b4cca5c9b76f48afc0ab09608a1109f7",
+  "size_bytes": 16878248,
   "min_os": "Windows 10 / 11"
 }
