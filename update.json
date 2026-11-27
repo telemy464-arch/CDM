@@ -1,15 +1,15 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.3.8",
+  "version": "2.3.9",
   "release_date": "2026-11-28",
-  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.8.exe",
+  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.9.exe",
   "changelog": [
-    "Mandatory update check now runs at startup even if optional automatic checks are disabled",
-    "Update manifest requests bypass cached copies so new forced releases are detected",
-    "Fixed false 100% progress and made pause/resume preserve partial video downloads"
+    "Progress percentage now uses downloaded bytes divided by total bytes for proportional IDM-style updates",
+    "Shows tenths of a percent such as 0.5% and 1.0%; size remains estimating when the source has no total yet",
+    "Removed the artificial 99.9% cap during active downloads"
   ],
   "mandatory": true,
-  "sha256": "1f09e7ecd8b2de411759bc37422d21b98f5efc2b8306dba06c9851c10749a8b9",
-  "size_bytes": 16878316,
+  "sha256": "8ea674d7c0f64ff2fe49a835e8e7810d5be9d4556a7c0f354a2d97a7651c1dd5",
+  "size_bytes": 16876006,
   "min_os": "Windows 10 / 11"
 }

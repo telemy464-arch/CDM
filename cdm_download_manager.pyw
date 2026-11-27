@@ -50,7 +50,7 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.8"
+VERSION         = "2.3.9"
 BUILD_DATE      = "2026-11-28"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
@@ -1042,12 +1042,8 @@ class YtDlpTask:
                                 if tot >= current:
                                     self._stream_sizes[stream_key] = tot
                                 self.size = sum(self._stream_sizes.values()) or None
-                        if self.size and self.downloaded:
-                            self.progress = min(0.999, max(0.0, self.downloaded / self.size))
-                        elif len(parts) >= 3:
-                            pct_clean = re.sub(r'[^\d.]', '', parts[2])
-                            if pct_clean:
-                                self.progress = min(0.999, max(0.0, float(pct_clean) / 100.0))
+                        if self.size:
+                            self.progress = max(0.0, min(1.0, self.downloaded / self.size))
                         now = time.monotonic()
                         elapsed = now - self._speed_sample_at
                         if elapsed >= 0.25:
@@ -1527,14 +1523,14 @@ class IDMDownloadStatusDialog:
             return
         task = self.task
         title_fname = getattr(task, "filename", "") or "download"
-        raw_pct = getattr(task, "progress", 0.0) or 0.0
-        pct_val = raw_pct * 100 if raw_pct else (task.downloaded / task.size * 100 if getattr(task, "size", None) else 0.0)
-        if task.status in ("downloading", "merging", "pausing"):
-            pct_val = min(99.9, pct_val)
+        total_bytes = getattr(task, "size", None)
+        pct_val = (task.downloaded / total_bytes * 100) if total_bytes else None
+        if pct_val is None:
+            pct_val = 0.0
         self.win.title(f"{int(pct_val)}% {title_fname}")
 
         status_text = {
-            "downloading": f"Receiving data... {pct_val:.1f}%",
+            "downloading": f"Receiving data... {pct_val:.1f}%" if total_bytes else "Receiving data... calculating size",
             "merging": "Finalizing video...",
             "pausing": "Pausing...",
             "stopping": "Stopping...",
@@ -1549,7 +1545,7 @@ class IDMDownloadStatusDialog:
         size_str = f"{human_size(task.size)} ({task.size:,} bytes)" if getattr(task, "size", None) else ("Estimating…" if isinstance(task, YtDlpTask) else human_size(task.downloaded))
         self.val_size.configure(text=size_str)
 
-        dl_str = f"{human_size(task.downloaded)} ({pct_val:.2f} %)"
+        dl_str = f"{human_size(task.downloaded)} ({pct_val:.1f} % of {human_size(total_bytes)})" if total_bytes else f"{human_size(task.downloaded)} (size estimating)"
         self.val_dl.configure(text=dl_str)
 
         active = task.status == "downloading"
@@ -2987,9 +2983,10 @@ del "%~f0" >nul 2>&1
         fname = getattr(task, "filename", "") or getattr(task, "url", "")[:40]
         sz = human_size(getattr(task, "size", None))
         dl = human_size(getattr(task, "downloaded", 0))
-        pct = int((getattr(task, "progress", 0.0) or 0.0) * 100)
+        pct = (task.downloaded / task.size * 100) if getattr(task, "size", None) else None
         stat = getattr(task, "status", "ready").capitalize()
-        sb_l.configure(text=f"  Selected: {fname}  •  {dl} / {sz} ({pct}%)  •  {stat}")
+        pct_text = f"{pct:.1f}%" if pct is not None else "calculating size"
+        sb_l.configure(text=f"  Selected: {fname}  •  {dl} / {sz} ({pct_text})  •  {stat}")
 
     def refresh_tree():
         cat_f = get_cat_filter()
@@ -3009,9 +3006,8 @@ del "%~f0" >nul 2>&1
             elif cat_f == "grabber":        show = ("grabber" in getattr(task, "source", ""))
 
             if show:
-                raw_pct = getattr(task, "progress", 0.0) or 0.0
-                pct_value = min(99.9, raw_pct * 100) if task.status in ("downloading", "merging", "pausing") else raw_pct * 100
-                pct = f"{pct_value:.1f}%" if getattr(task, "size", None) else ("—" if isinstance(task, DownloadTask) else f"{int(pct_value)}%")
+                pct_value = (task.downloaded / task.size * 100) if getattr(task, "size", None) else None
+                pct = f"{pct_value:.1f}%" if pct_value is not None else "—"
                 size_s = human_size(task.size) if getattr(task, "size", None) else ("Estimating…" if isinstance(task, YtDlpTask) else human_size(task.downloaded))
                 spd = task_speed(task) if task.status == "downloading" else 0
                 eta = format_eta((task.size - task.downloaded) / max(1, spd)) if (getattr(task, "size", None) and task.status == "downloading" and spd > 0) else "—"
