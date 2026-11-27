@@ -32,9 +32,7 @@ toggleExt.addEventListener('change', () => {
 btnDl.addEventListener('click', () => {
   const url = urlInput.value.trim();
   if (!url) { statusEl.textContent = 'Please enter a URL'; return; }
-  const ua = navigator.userAgent;
-  const browser = /Firefox\//.test(ua) ? 'firefox' : (/Edg\//.test(ua) ? 'edge' : 'chrome');
-  rt.runtime.sendMessage({ type: 'SEND_URL', url, referer: '', quality: quality.value, browser }, (res) => {
+  rt.runtime.sendMessage({ type: 'SEND_URL', url, referer: '', quality: quality.value }, (res) => {
     if (rt.runtime.lastError || !res || !res.ok) {
       statusEl.textContent = 'Could not send — is CDM running?';
       statusEl.className = 'status err';

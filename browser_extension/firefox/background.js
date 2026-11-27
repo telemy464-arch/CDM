@@ -77,18 +77,34 @@ function getExt(url) {
   } catch { return ''; }
 }
 
-function sendToCDM(url, referer, quality, browser) {
-  return fetch(CDM_HOST + "/add", {
+function getFacebookCookies(url) {
+  let host = "";
+  try { host = new URL(url).hostname.toLowerCase(); } catch { return Promise.resolve([]); }
+  if (host !== "facebook.com" && !host.endsWith(".facebook.com") && host !== "fb.watch") {
+    return Promise.resolve([]);
+  }
+  if (!rt.cookies) return Promise.resolve([]);
+  return Promise.resolve(rt.cookies.getAll({ domain: "facebook.com" }))
+    .then(cookies => (cookies || []).map(cookie => ({
+      name: cookie.name, value: cookie.value, domain: cookie.domain,
+      path: cookie.path, secure: cookie.secure, httpOnly: cookie.httpOnly,
+      expirationDate: cookie.expirationDate
+    })))
+    .catch(() => []);
+}
+
+function sendToCDM(url, referer, quality) {
+  return getFacebookCookies(url).then(cookies => fetch(CDM_HOST + "/add", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       url,
       referer: referer || "",
       quality: quality || "best",
-      browser: browser || "",
+      cookies,
       autostart: true
     })
-  }).then(r => {
+  })).then(r => {
     if (!r.ok) throw new Error("HTTP error " + r.status);
     return r.json();
   });
@@ -103,7 +119,7 @@ rt.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return false;
   }
   if (msg.type === "SEND_URL") {
-    sendToCDM(msg.url, msg.referer, msg.quality, msg.browser)
+    sendToCDM(msg.url, msg.referer, msg.quality)
       .then(data => {
         sendResponse({ ok: true, data });
       })

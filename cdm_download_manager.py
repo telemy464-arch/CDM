@@ -31,7 +31,7 @@ Features:
 
 import hashlib, json, math, os, shutil, subprocess, sys, re
 import threading, time, urllib.error, urllib.parse, urllib.request
-import socket, http.server, winsound, tempfile, ssl
+import socket, http.server, http.cookiejar, winsound, tempfile, ssl
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -50,7 +50,7 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.4"
+VERSION         = "2.3.5"
 BUILD_DATE      = "2026-11-28"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
@@ -767,7 +767,7 @@ class DownloadTask:
 class YtDlpTask:
     """Wraps yt-dlp for video and audio streaming downloads (YouTube, Facebook, TikTok, etc.)."""
     def __init__(self, url, save_dir, quality="best", fmt="mp4",
-                 audio_only=False, proxy="", filename="", referer="", browser=""):
+                 audio_only=False, proxy="", filename="", referer="", cookies=None):
         self.url            = url.strip()
         self.save_dir       = save_dir
         self.quality        = quality
@@ -775,7 +775,7 @@ class YtDlpTask:
         self.audio_only     = audio_only
         self.proxy          = proxy
         self.referer        = referer or ""
-        self.browser        = browser if browser in {"chrome", "edge", "firefox", "brave", "opera", "vivaldi"} else ""
+        self.cookies        = cookies if isinstance(cookies, list) else []
         self.status         = "queued"
         self.filename       = filename or ""
         self.filepath       = ""
@@ -856,13 +856,14 @@ class YtDlpTask:
         ]
 
         host = (urllib.parse.urlparse(self.url).hostname or "").lower()
+        cookie_file = ""
         if host == "facebook.com" or host.endswith(".facebook.com") or host == "fb.watch" or host.endswith(".fb.watch"):
-            # Facebook often serves a login wall instead of the requested reel.
-            # yt-dlp reads these cookies locally and sends them to Facebook.
-            if self.browser:
-                cmd += ["--cookies-from-browser", self.browser]
             if self.referer:
                 cmd += ["--referer", self.referer]
+            if self.cookies:
+                cookie_file = self._write_facebook_cookies()
+                if cookie_file:
+                    cmd += ["--cookies", cookie_file]
 
         if self.audio_only or str(self.fmt).lower() == "mp3":
             cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
@@ -1025,6 +1026,47 @@ class YtDlpTask:
         except Exception as e:
             self.status = "error"
             self.error_msg = str(e)
+        finally:
+            if cookie_file:
+                try: os.remove(cookie_file)
+                except OSError: pass
+
+    def _write_facebook_cookies(self):
+        """Write only Facebook cookies supplied by the extension into a short-lived Netscape jar."""
+        fd, path = tempfile.mkstemp(prefix="cdm-fb-", suffix=".cookies.txt")
+        os.close(fd)
+        jar = http.cookiejar.MozillaCookieJar(path)
+        try:
+            for item in self.cookies:
+                if not isinstance(item, dict):
+                    continue
+                domain = str(item.get("domain", "")).lower()
+                base_domain = domain.lstrip(".")
+                if base_domain != "facebook.com" and not base_domain.endswith(".facebook.com"):
+                    continue
+                name, value = str(item.get("name", "")), str(item.get("value", ""))
+                if not name or any(c in name + value for c in "\t\r\n"):
+                    continue
+                expires_value = item.get("expirationDate")
+                expires = int(expires_value) if expires_value else None
+                rest = {"HttpOnly": None} if item.get("httpOnly") else {}
+                cookie = http.cookiejar.Cookie(
+                    version=0, name=name, value=value, port=None, port_specified=False,
+                    domain=domain, domain_specified=domain.startswith("."),
+                    domain_initial_dot=domain.startswith("."), path=item.get("path") or "/",
+                    path_specified=True, secure=bool(item.get("secure")), expires=expires,
+                    discard=expires is None, comment=None, comment_url=None, rest=rest,
+                    rfc2109=False)
+                jar.set_cookie(cookie)
+            if not jar:
+                os.remove(path)
+                return ""
+            jar.save(ignore_discard=True, ignore_expires=False)
+            return path
+        except Exception:
+            try: os.remove(path)
+            except OSError: pass
+            raise
 
     def _parse_speed(self, s):
         try:
@@ -1118,9 +1160,9 @@ class ExtensionServer:
                         ref  = data.get("referer","")
                         quality = data.get("quality","best")
                         autostart = data.get("autostart", True)
-                        browser = data.get("browser", "")
+                        cookies = data.get("cookies", [])
                         if url and parent.on_url:
-                            parent.on_url(url, ref, quality, autostart, browser)
+                            parent.on_url(url, ref, quality, autostart, cookies)
                     except Exception: pass
                     self.send_response(200)
                     self._cors()
@@ -1897,13 +1939,13 @@ def launch_gui(initial_url=None, initial_quality=None, minimized=False):
         refresh_detail()
 
     def add_task(url, filename=None, autostart=True, referer="", is_ytdlp=False,
-                 quality="best", fmt="mp4", audio_only=False, browser=""):
+                 quality="best", fmt="mp4", audio_only=False, cookies=None):
         if is_ytdlp or is_video_stream_url(url):
             task = YtDlpTask(url, settings["download_dir"],
                              quality=quality or settings.get("yt_quality", "best"),
                              fmt=fmt or settings.get("yt_format", "mp4"),
                              audio_only=audio_only,
-                             proxy=settings.get("proxy",""), referer=referer, browser=browser)
+                             proxy=settings.get("proxy",""), referer=referer, cookies=cookies)
         else:
             task = DownloadTask(url, settings["download_dir"],
                                 connections=settings.get("connections",8),
@@ -2964,7 +3006,7 @@ del "%~f0" >nul 2>&1
     # BROWSER EXTENSION SERVER (PORT 19876)
     # ══════════════════════════════════════════════════════════════════════════
     ext_server = ExtensionServer(EXT_PORT)
-    def on_ext_url(url, referer="", quality="best", autostart=True, browser=""):
+    def on_ext_url(url, referer="", quality="best", autostart=True, cookies=None):
         def _handle():
             try:
                 root.deiconify()
@@ -2979,7 +3021,7 @@ del "%~f0" >nul 2>&1
                 audio_only = str(q).lower() == "audio"
                 fmt = "mp3" if audio_only else settings.get("yt_format", "mp4")
                 add_task(url, autostart=True, referer=referer, is_ytdlp=True,
-                         quality=q, fmt=fmt, audio_only=audio_only, browser=browser)
+                         quality=q, fmt=fmt, audio_only=audio_only, cookies=cookies)
             else:
                 add_task(url, autostart=True, referer=referer)
 

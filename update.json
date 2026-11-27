@@ -1,15 +1,15 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "release_date": "2026-11-28",
-  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.4.exe",
+  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.5.exe",
   "changelog": [
-    "Facebook reel downloads now use browser session cookies from the browser that initiated the download",
-    "Download errors now show the actual yt-dlp details instead of a generic message",
-    "Preserved browser video quality selection and MP3 extraction fixes"
+    "Facebook downloads now receive Facebook-only cookies from the active browser extension, avoiding locked Chrome cookie databases",
+    "Facebook cookies are written to a temporary domain-scoped file and deleted after each download",
+    "yt-dlp failure details remain visible"
   ],
   "mandatory": true,
-  "sha256": "c0944b7c768e402170a35bd49f2d9acdbbb81613065da29e3645d2ac5cc62519",
-  "size_bytes": 16873807,
+  "sha256": "c28937445fb9b28503dd6bf85e0eb9af9c34568e1ee425f338b3a88a1c46f120",
+  "size_bytes": 16876202,
   "min_os": "Windows 10 / 11"
 }
