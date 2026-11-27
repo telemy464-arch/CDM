@@ -50,7 +50,7 @@ except ImportError:
 
 # ── App constants ─────────────────────────────────────────────────────────────
 APP_NAME        = "CDM - Cloud Download Manager"
-VERSION         = "2.3.5"
+VERSION         = "2.3.6"
 BUILD_DATE      = "2026-11-28"
 TRIAL_DAYS      = 3
 EXT_PORT        = 19876   # local HTTP server for browser extension
@@ -272,6 +272,17 @@ def human_size(n):
 
 def human_speed(bps):
     return (human_size(bps) + "/s") if bps else "—"
+
+def human_speed_mbps(bps):
+    bps = max(0.0, float(bps or 0))
+    return f"{human_size(bps)}/s ({bps * 8 / 1_000_000:.2f} Mbps)"
+
+def task_speed(task):
+    speed = max(0.0, float(getattr(task, "_speed", 0) or 0))
+    sampled_at = getattr(task, "_speed_sample_at", None)
+    if sampled_at is not None and time.monotonic() - sampled_at > 1.0:
+        return 0.0
+    return speed
 
 def format_eta(s):
     if s is None or s < 0 or math.isinf(s): return "—"
@@ -783,6 +794,10 @@ class YtDlpTask:
         self.size           = None
         self.downloaded     = 0
         self._speed         = 0.0
+        self._speed_sample_bytes = 0
+        self._speed_sample_at = time.monotonic()
+        self._stream_downloaded = {}
+        self._stream_sizes = {}
         self.error_msg      = ""
         self.added_at       = time.time()
         self.finished_at    = None
@@ -853,6 +868,9 @@ class YtDlpTask:
             "--no-mtime",
             "--no-colors",
             "--encoding", "utf-8",
+            "--progress",
+            "--progress-delta", "0.25",
+            "--concurrent-fragments", "8",
         ]
 
         host = (urllib.parse.urlparse(self.url).hostname or "").lower()
@@ -915,7 +933,7 @@ class YtDlpTask:
         cmd += [
             "--print", "METADATA:%(title)s|%(filesize_approx,filesize)s|%(ext)s",
             "--print", "after_move:FINAL:%(filepath)s",
-            "--progress-template", "download:PROG:%(progress.downloaded_bytes)s|%(progress.total_bytes,progress.total_bytes_estimate)s|%(progress._percent_str)s|%(progress._speed_str)s|%(progress.filename)s",
+            "--progress-template", "download:PROG:%(progress.downloaded_bytes)s|%(progress.total_bytes,progress.total_bytes_estimate)s|%(progress._percent_str)s|%(progress.filename)s",
             "-o", os.path.join(save_folder, "%(title)s.%(ext)s"),
             self.url
         ]
@@ -934,6 +952,7 @@ class YtDlpTask:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                bufsize=1,
                 creationflags=no_window,
                 startupinfo=startupinfo,
                 encoding="utf-8",
@@ -968,23 +987,31 @@ class YtDlpTask:
                 elif line.startswith("PROG:"):
                     parts = line[5:].split("|")
                     try:
+                        stream_key = parts[3].strip() if len(parts) >= 4 and parts[3].strip() else "current"
                         if len(parts) >= 1 and parts[0].strip().isdigit():
-                            self.downloaded = int(parts[0].strip())
+                            self._stream_downloaded[stream_key] = int(parts[0].strip())
+                            self.downloaded = sum(self._stream_downloaded.values())
                         if len(parts) >= 2 and parts[1].strip().isdigit():
                             tot = int(parts[1].strip())
                             if tot > 0:
-                                self.size = tot
+                                self._stream_sizes[stream_key] = tot
+                                self.size = sum(self._stream_sizes.values())
                         if len(parts) >= 3:
                             pct_clean = re.sub(r'[^\d.]', '', parts[2])
                             if pct_clean:
                                 self.progress = float(pct_clean) / 100.0
                         if self.size and self.downloaded:
                             self.progress = min(1.0, max(0.0, self.downloaded / self.size))
-                        if len(parts) >= 4:
-                            self._speed = self._parse_speed(parts[3])
-                        if len(parts) >= 5 and parts[4].strip() and not self.filename:
-                            self.filename = os.path.basename(parts[4].strip())
-                            self.filepath = parts[4].strip()
+                        now = time.monotonic()
+                        elapsed = now - self._speed_sample_at
+                        if elapsed >= 0.25:
+                            delta = self.downloaded - self._speed_sample_bytes
+                            self._speed = max(0.0, delta / elapsed)
+                            self._speed_sample_bytes = self.downloaded
+                            self._speed_sample_at = now
+                        if len(parts) >= 4 and parts[3].strip() and not self.filename:
+                            self.filename = os.path.basename(parts[3].strip())
+                            self.filepath = parts[3].strip()
                     except Exception:
                         pass
                 elif line.startswith("FINAL:"):
@@ -1307,7 +1334,7 @@ class IDMDownloadStatusDialog:
         self.val_status = make_row(grid_fr, 0, "Status", "Receiving data...", fg="#0055aa")
         self.val_size   = make_row(grid_fr, 1, "File size", "—")
         self.val_dl     = make_row(grid_fr, 2, "Downloaded", "0 MB (0 %)")
-        self.val_speed  = make_row(grid_fr, 3, "Transfer rate", "0 KB/sec")
+        self.val_speed  = make_row(grid_fr, 3, "Transfer rate", "0 B/s (0.00 Mbps)")
         self.val_eta    = make_row(grid_fr, 4, "Time left", "—")
         self.val_resume = make_row(grid_fr, 5, "Resume capability", "Yes", fg="#008800")
 
@@ -1448,7 +1475,7 @@ class IDMDownloadStatusDialog:
         self.win.title(f"{int(pct_val)}% {title_fname}")
 
         status_text = {
-            "downloading": "Receiving data...",
+            "downloading": f"Receiving data... {pct_val:.1f}%",
             "queued": "Queued",
             "paused": "Paused",
             "stopped": "Stopped",
@@ -1463,8 +1490,8 @@ class IDMDownloadStatusDialog:
         dl_str = f"{human_size(task.downloaded)} ({pct_val:.2f} %)"
         self.val_dl.configure(text=dl_str)
 
-        spd = getattr(task, "_speed", 0) if task.status == "downloading" else 0
-        self.val_speed.configure(text=human_speed(spd) if task.status == "downloading" else "0 KB/sec")
+        spd = task_speed(task) if task.status == "downloading" else 0
+        self.val_speed.configure(text=human_speed_mbps(spd) if task.status == "downloading" else "0 B/s (0.00 Mbps)")
 
         eta_s = format_eta((task.size - task.downloaded) / max(1, spd)) if (getattr(task, "size", None) and task.status == "downloading" and spd > 0) else "—"
         self.val_eta.configure(text=eta_s)
@@ -1506,7 +1533,6 @@ def launch_gui(initial_url=None, initial_quality=None, minimized=False):
     schedule_at  = {"time": None}
     tasks        = []     # list of DownloadTask or YtDlpTask
     sel          = {"task": None}
-    _gs          = {"spd": 0.0, "total": 0, "at": time.time()}
     _clip_banner = {"visible": False, "url": ""}
 
     # ── translation helper ────────────────────────────────────────────────────
@@ -1790,7 +1816,7 @@ def launch_gui(initial_url=None, initial_quality=None, minimized=False):
         ("size",   90,  "Size",            "center"),
         ("status", 110, "Status",          "center"),
         ("eta",    90,  "Time left",       "center"),
-        ("speed",  110, "Transfer rate",   "center"),
+        ("speed",  165, "Transfer rate",   "center"),
         ("date",   135, "Last Try Date",   "center"),
         ("desc",   180, "Description",     "w"),
     ]:
@@ -2916,9 +2942,9 @@ del "%~f0" >nul 2>&1
                 raw_pct = getattr(task, "progress", 0.0) or 0.0
                 pct = f"{raw_pct*100:.1f}%" if getattr(task, "size", None) else ("—" if isinstance(task, DownloadTask) else f"{int(raw_pct*100)}%")
                 size_s = human_size(task.size) if getattr(task, "size", None) else human_size(task.downloaded)
-                spd = getattr(task, "_speed", 0) if task.status == "downloading" else 0
+                spd = task_speed(task) if task.status == "downloading" else 0
                 eta = format_eta((task.size - task.downloaded) / max(1, spd)) if (getattr(task, "size", None) and task.status == "downloading" and spd > 0) else "—"
-                speed_s = human_speed(spd) if task.status == "downloading" else "—"
+                speed_s = human_speed_mbps(spd) if task.status == "downloading" else "—"
                 icon = CAT_ICONS.get(getattr(task, "category", ""), "📁")
                 date_s = datetime.fromtimestamp(task.added_at).strftime("%b %d %H:%M:%S %Y") if getattr(task, "added_at", None) else "—"
                 stat_s = "Complete" if task.status == "completed" else (f"{pct}" if task.status == "downloading" else task.status.capitalize())
@@ -3064,13 +3090,10 @@ del "%~f0" >nul 2>&1
     # MAIN REFRESH LOOP
     # ══════════════════════════════════════════════════════════════════════════
     def refresh():
-        # global speed
-        total_dl=sum(t3.downloaded for t3 in tasks)
-        now=time.time(); dt=now-_gs["at"]
-        if dt>0: _gs["spd"]=(total_dl-_gs["total"])/dt
-        _gs["total"]=total_dl; _gs["at"]=now
-        spd=_gs["spd"]
-        hdr_spd_var.set(f"↓ {human_speed(spd)}" if spd>0 else "")
+        # Sum measured per-task rates; never infer a rate from an estimated file size.
+        active_tasks = [t3 for t3 in tasks if t3.status == "downloading"]
+        spd = sum(task_speed(t3) for t3 in active_tasks)
+        hdr_spd_var.set(f"↓ {human_speed_mbps(spd)}" if active_tasks else "")
 
         refresh_tree()
 

@@ -1,15 +1,16 @@
 {
   "app_name": "CDM - Cloud Download Manager",
-  "version": "2.3.5",
+  "version": "2.3.6",
   "release_date": "2026-11-28",
-  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.5.exe",
+  "download_url": "https://raw.githubusercontent.com/telemy464-arch/CDM/main/installer/output/CDM_Setup_v2.3.6.exe",
   "changelog": [
-    "Facebook downloads now receive Facebook-only cookies from the active browser extension, avoiding locked Chrome cookie databases",
-    "Facebook cookies are written to a temporary domain-scoped file and deleted after each download",
-    "yt-dlp failure details remain visible"
+    "yt-dlp live progress is explicitly enabled and refreshed every 250 ms",
+    "Downloaded bytes and video/audio stream totals update during transfers",
+    "Transfer rate is measured from downloaded byte deltas and shown in MB/s and Mbps",
+    "Fragmented videos use up to eight concurrent fragments for faster transfers"
   ],
   "mandatory": true,
-  "sha256": "c28937445fb9b28503dd6bf85e0eb9af9c34568e1ee425f338b3a88a1c46f120",
-  "size_bytes": 16876202,
+  "sha256": "bf728d6234cfb0d1a85fccf98896cd485f6d740e33cd2f84c360d4dc40a88ca5",
+  "size_bytes": 16875596,
   "min_os": "Windows 10 / 11"
 }
